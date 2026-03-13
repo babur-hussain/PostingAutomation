@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
 
+const GRAPH_API_VERSION = 'v22.0';
+
 @Injectable()
 export class InstagramService {
   private readonly logger = new Logger(InstagramService.name);
@@ -8,13 +10,9 @@ export class InstagramService {
   /**
    * Instagram Content Publishing API for Instagram Business Login.
    *
-   * Uses graph.instagram.com as the host URL since we have an IGAA-prefixed
-   * token from Instagram Business Login (not a Facebook EAAC token).
-   *
-   * The API tries multiple host/version combinations to find what works:
-   * 1. graph.instagram.com/v22.0 (latest)
-   * 2. graph.instagram.com/v21.0
-   * 3. graph.facebook.com/v21.0 (Facebook Graph API)
+   * Uses graph.instagram.com with Bearer token authentication
+   * and JSON request body as per Meta's official documentation:
+   * https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/content-publishing
    */
 
   async publishInstagramPost(
@@ -31,71 +29,55 @@ export class InstagramService {
     this.logger.log(`Media URL: ${mediaUrl}`);
     this.logger.log(`Token length: ${accessToken?.length}, prefix: ${accessToken?.substring(0, 4)}`);
 
-    // Try multiple API base URLs since different token types work with different hosts
-    const apiBases = [
-      'https://graph.instagram.com/v22.0',
-      'https://graph.instagram.com/v21.0',
-      'https://graph.facebook.com/v21.0',
-    ];
+    const apiBase = `https://graph.instagram.com/${GRAPH_API_VERSION}`;
+    const headers = {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    };
 
-    let lastError: any = null;
+    // 1. Create media container
+    const containerId = await this.createContainer(
+      apiBase, igBusinessAccountId, headers, mediaUrl, caption,
+    );
+    this.logger.log(`Created container: ${containerId}`);
 
-    for (const apiBase of apiBases) {
-      try {
-        this.logger.log(`Trying API base: ${apiBase}`);
-
-        // 1. Create container
-        const containerId = await this.createContainer(apiBase, igBusinessAccountId, accessToken, mediaUrl, caption);
-        this.logger.log(`Created container: ${containerId} (using ${apiBase})`);
-
-        // Wait for media to be ready if it's a video
-        if (this.isVideoUrl(mediaUrl)) {
-          await this.waitForMediaReady(apiBase, containerId, accessToken);
-        }
-
-        // 2. Publish container
-        const publishedId = await this.publishContainer(apiBase, igBusinessAccountId, accessToken, containerId);
-
-        this.logger.log(`Successfully published Instagram post: ${publishedId}`);
-        return publishedId;
-      } catch (error) {
-        const metaError = error?.response?.data?.error;
-        this.logger.warn(`Failed with ${apiBase}: ${metaError ? JSON.stringify(metaError) : error.message}`);
-        lastError = error;
-      }
+    // Wait for media to be ready if it's a video
+    if (this.isVideoUrl(mediaUrl)) {
+      await this.waitForMediaReady(apiBase, containerId, headers);
     }
 
-    // All attempts failed
-    const metaError = lastError?.response?.data?.error;
-    this.logger.error(`All publish attempts failed. Last error: ${metaError ? JSON.stringify(metaError) : lastError?.message}`);
-    throw lastError;
+    // 2. Publish the container
+    const publishedId = await this.publishContainer(
+      apiBase, igBusinessAccountId, headers, containerId,
+    );
+
+    this.logger.log(`Successfully published Instagram post: ${publishedId}`);
+    return publishedId;
   }
 
   private async createContainer(
     apiBase: string,
     igAccountId: string,
-    accessToken: string,
+    headers: Record<string, string>,
     mediaUrl: string,
     caption: string,
   ): Promise<string> {
     const isVideo = this.isVideoUrl(mediaUrl);
 
-    const params: any = {
-      access_token: accessToken,
-      caption,
-    };
-
+    const body: any = { caption };
     if (isVideo) {
-      params.media_type = 'VIDEO';
-      params.video_url = mediaUrl;
+      body.media_type = 'VIDEO';
+      body.video_url = mediaUrl;
     } else {
-      params.image_url = mediaUrl;
+      body.image_url = mediaUrl;
     }
+
+    this.logger.log(`Creating container at ${apiBase}/${igAccountId}/media with body: ${JSON.stringify(body)}`);
 
     const response = await axios.post(
       `${apiBase}/${igAccountId}/media`,
-      null,
-      { params },
+      body,
+      { headers },
     );
 
     return response.data.id;
@@ -104,18 +86,15 @@ export class InstagramService {
   private async publishContainer(
     apiBase: string,
     igAccountId: string,
-    accessToken: string,
+    headers: Record<string, string>,
     creationId: string,
   ): Promise<string> {
+    this.logger.log(`Publishing container ${creationId} at ${apiBase}/${igAccountId}/media_publish`);
+
     const response = await axios.post(
       `${apiBase}/${igAccountId}/media_publish`,
-      null,
-      {
-        params: {
-          creation_id: creationId,
-          access_token: accessToken,
-        },
-      },
+      { creation_id: creationId },
+      { headers },
     );
 
     return response.data.id;
@@ -124,7 +103,7 @@ export class InstagramService {
   private async waitForMediaReady(
     apiBase: string,
     containerId: string,
-    accessToken: string,
+    headers: Record<string, string>,
     maxAttempts: number = 30,
     intervalMs: number = 5000,
   ): Promise<void> {
@@ -132,14 +111,14 @@ export class InstagramService {
       const response = await axios.get(
         `${apiBase}/${containerId}`,
         {
-          params: {
-            fields: 'status_code',
-            access_token: accessToken,
-          },
+          params: { fields: 'status_code' },
+          headers,
         },
       );
 
       const status = response.data.status_code;
+      this.logger.log(`Container ${containerId} status: ${status} (attempt ${i + 1}/${maxAttempts})`);
+
       if (status === 'FINISHED') return;
       if (status === 'ERROR') {
         throw new Error(`Instagram media processing failed for container ${containerId}`);

@@ -96,7 +96,11 @@ export class InstagramProvider {
 
   /**
    * Exchange short-lived token for long-lived token (~60 days).
-   * Tries multiple URL/method combinations since Meta's API behavior varies.
+   * Per official Meta docs:
+   * GET https://graph.instagram.com/access_token
+   *   ?grant_type=ig_exchange_token
+   *   &client_secret=<INSTAGRAM_APP_SECRET>
+   *   &access_token=<SHORT_LIVED_TOKEN>
    */
   async getLongLivedToken(shortLivedToken: string): Promise<{
     accessToken: string;
@@ -104,52 +108,25 @@ export class InstagramProvider {
   }> {
     const axios = (await import('axios')).default;
 
-    this.logger.log(`Exchanging short-lived token for long-lived token... (token length: ${shortLivedToken?.length})`);
+    this.logger.log(`Exchanging short-lived token for long-lived token...`);
 
-    const params = {
-      grant_type: 'ig_exchange_token',
-      client_secret: this.appSecret,
-      access_token: shortLivedToken,
+    const response = await axios.get(
+      'https://graph.instagram.com/access_token',
+      {
+        params: {
+          grant_type: 'ig_exchange_token',
+          client_secret: this.appSecret,
+          access_token: shortLivedToken,
+        },
+      },
+    );
+
+    this.logger.log(`Long-lived token exchange response: ${JSON.stringify(response.data)}`);
+
+    return {
+      accessToken: response.data.access_token,
+      expiresIn: response.data.expires_in || 5184000,
     };
-
-    // Try multiple URL + method combinations
-    const attempts = [
-      { method: 'GET', url: 'https://graph.instagram.com/access_token' },
-      { method: 'GET', url: 'https://graph.instagram.com/v21.0/access_token' },
-      { method: 'GET', url: 'https://graph.instagram.com/v22.0/access_token' },
-      { method: 'POST', url: 'https://graph.instagram.com/access_token' },
-      { method: 'POST', url: 'https://graph.instagram.com/v21.0/access_token' },
-    ];
-
-    for (const attempt of attempts) {
-      try {
-        this.logger.log(`Trying ${attempt.method} ${attempt.url}...`);
-        let response: any;
-        if (attempt.method === 'GET') {
-          response = await axios.get(attempt.url, { params });
-        } else {
-          response = await axios.post(
-            attempt.url,
-            new URLSearchParams(params as any).toString(),
-            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
-          );
-        }
-
-        this.logger.log(`SUCCESS with ${attempt.method} ${attempt.url}: ${JSON.stringify(response.data)}`);
-        const tokenData = response.data.data?.[0] || response.data;
-
-        return {
-          accessToken: tokenData.access_token,
-          expiresIn: tokenData.expires_in || 5184000,
-        };
-      } catch (err) {
-        const errBody = err?.response?.data ? JSON.stringify(err.response.data) : err?.message;
-        this.logger.warn(`${attempt.method} ${attempt.url} failed: ${errBody}`);
-      }
-    }
-
-    this.logger.error('All long-lived token exchange attempts failed');
-    throw new Error('Failed to exchange short-lived token for long-lived token');
   }
 
   /**

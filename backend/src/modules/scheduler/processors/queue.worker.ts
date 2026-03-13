@@ -1,0 +1,122 @@
+import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
+import { Logger } from '@nestjs/common';
+import { Job } from 'bullmq';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { ConfigService } from '@nestjs/config';
+import { Post, PostDocument, PostStatus, PostPlatform } from '../../posts/schemas/post.schema';
+import { SocialAccountsService } from '../../social-accounts/social-accounts.service';
+import { SocialPlatform } from '../../social-accounts/schemas/social-account.schema';
+import { InstagramService } from '../../../integrations/instagram/instagram.service';
+import { FacebookService } from '../../../integrations/facebook/facebook.service';
+
+@Processor('posts', { concurrency: 5 })
+export class QueueWorker extends WorkerHost {
+  private readonly logger = new Logger(QueueWorker.name);
+
+  constructor(
+    @InjectModel(Post.name) private postModel: Model<PostDocument>,
+    private socialAccountsService: SocialAccountsService,
+    private instagramService: InstagramService,
+    private facebookService: FacebookService,
+    private configService: ConfigService,
+  ) {
+    super();
+  }
+
+  async process(job: Job<{ postId: string }, any, string>): Promise<any> {
+    const { postId } = job.data;
+    this.logger.log(`Processing job ${job.id} for post ${postId}`);
+
+    const post = await this.postModel.findById(postId);
+    if (!post) {
+      this.logger.warn(`Post ${postId} not found`);
+      return;
+    }
+
+    if (post.status !== PostStatus.PENDING && post.status !== PostStatus.PROCESSING) {
+      this.logger.warn(`Post ${postId} is in status ${post.status}. Skipping.`);
+      return;
+    }
+
+    // Mark as processing
+    post.status = PostStatus.PROCESSING;
+    await post.save();
+
+    try {
+      const accountsWithTokens = await this.socialAccountsService.getAccountsForPlatforms(
+        post.userId.toString(),
+        post.platforms as unknown as SocialPlatform[],
+      );
+
+      if (accountsWithTokens.length === 0) {
+        throw new Error('No social accounts found for the specified platforms');
+      }
+
+      const results: any[] = [];
+
+      for (const accountItem of accountsWithTokens) {
+        const { account, decryptedToken } = accountItem;
+        let success = false;
+        let platformId: string | null = null;
+        let errorMsg: string | null = null;
+
+        try {
+          if (account.platform as unknown as PostPlatform === PostPlatform.INSTAGRAM) {
+            platformId = await this.instagramService.publishInstagramPost(
+              account.accountId,
+              decryptedToken,
+              post.mediaUrl,
+              post.caption,
+            );
+            success = true;
+          } else if (account.platform as unknown as PostPlatform === PostPlatform.FACEBOOK) {
+            platformId = await this.facebookService.publishFacebookPost(
+              account.accountId,
+              decryptedToken,
+              post.caption,
+              post.mediaUrl,
+            );
+            success = true;
+          }
+        } catch (error) {
+          success = false;
+          errorMsg = error.message;
+          this.logger.error(
+            `Failed to publish post ${postId} to ${account.platform}: ${error.message}`,
+          );
+        }
+
+        results.push({
+          platform: account.platform,
+          success,
+          platformPostId: platformId,
+          error: errorMsg,
+          publishedAt: success ? new Date() : undefined,
+        });
+      }
+
+      const allSuccess = results.every((r) => r.success);
+      post.status = allSuccess ? PostStatus.PUBLISHED : PostStatus.FAILED;
+      await post.save();
+
+      return { results };
+
+    } catch (error) {
+      this.logger.error(`Failed to process post ${postId}: ${error.message}`);
+      post.status = PostStatus.FAILED;
+      await post.save();
+      throw error;
+    }
+  }
+
+  @OnWorkerEvent('completed')
+  onCompleted(job: Job) {
+    this.logger.log(`Job ${job.id} has completed!`);
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(job: Job, error: Error) {
+    this.logger.error(`Job ${job.id} failed with error ${error.message}`);
+  }
+}

@@ -54,16 +54,14 @@ export class InstagramService {
       );
       this.logger.log(`Created container: ${containerId}`);
 
-      // Wait for media to be ready if it's a video
-      if (this.isVideoUrl(mediaUrl)) {
-        await this.waitForMediaReady(
-          apiBase,
-          containerId,
-          accessToken,
-          {},
-          isNativeToken,
-        );
-      }
+      // Wait for media to be ready (both Image and Video processing take time on Meta's end)
+      await this.waitForMediaReady(
+        apiBase,
+        containerId,
+        accessToken,
+        {},
+        isNativeToken,
+      );
 
       // 2. Publish
       const publishedId = await this.publishContainer(

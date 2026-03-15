@@ -102,7 +102,7 @@ export class InstagramService {
       params.append('caption', caption);
     }
     if (isVideo) {
-      params.append('media_type', 'VIDEO');
+      params.append('media_type', 'REELS');
       params.append('video_url', mediaUrl);
     } else {
       params.append('image_url', mediaUrl);

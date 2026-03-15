@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Post, PostDocument, PostStatus } from './schemas/post.schema';
@@ -16,11 +21,13 @@ export class PostsService {
 
   async create(userId: string, dto: CreatePostDto): Promise<PostDocument> {
     if (!dto.caption && !dto.mediaUrl) {
-      throw new BadRequestException('A post must have either a caption or media attached');
+      throw new BadRequestException(
+        'A post must have either a caption or media attached',
+      );
     }
 
     const isScheduled = !!dto.scheduledTime;
-    
+
     if (isScheduled && new Date(dto.scheduledTime as string) <= new Date()) {
       throw new BadRequestException('scheduledTime must be in the future');
     }
@@ -42,13 +49,17 @@ export class PostsService {
       if (isScheduled) {
         await this.postSchedulerService.schedulePost(
           savedPost._id.toString(),
-          savedPost.scheduledTime as Date,
+          savedPost.scheduledTime,
         );
       } else {
-        await this.postSchedulerService.publishPostNow(savedPost._id.toString());
+        await this.postSchedulerService.publishPostNow(
+          savedPost._id.toString(),
+        );
       }
     } catch (error) {
-      this.logger.error(`Failed to schedule post ${savedPost._id}: ${error.message}`);
+      this.logger.error(
+        `Failed to schedule post ${savedPost._id}: ${error.message}`,
+      );
       savedPost.status = PostStatus.FAILED;
       await savedPost.save();
     }
@@ -90,18 +101,22 @@ export class PostsService {
     return post as PostDocument;
   }
 
-  async updateStatus(postId: string, status: PostStatus): Promise<PostDocument> {
-    return this.postModel.findByIdAndUpdate(
-      postId,
-      { status },
-      { new: true },
-    ).exec() as unknown as Promise<PostDocument>;
+  async updateStatus(
+    postId: string,
+    status: PostStatus,
+  ): Promise<PostDocument> {
+    return this.postModel
+      .findByIdAndUpdate(postId, { status }, { new: true })
+      .exec() as unknown as Promise<PostDocument>;
   }
 
   async remove(userId: string, postId: string): Promise<void> {
     const post = await this.findOne(userId, postId);
 
-    if (post.status === PostStatus.PENDING || post.status === PostStatus.PROCESSING) {
+    if (
+      post.status === PostStatus.PENDING ||
+      post.status === PostStatus.PROCESSING
+    ) {
       await this.postSchedulerService.cancelJob(post._id.toString());
     }
 

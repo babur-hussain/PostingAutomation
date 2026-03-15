@@ -6,12 +6,16 @@ import { User, UserDocument } from './schemas/user.schema';
 
 @Injectable()
 export class UsersService {
-  constructor(
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
-  ) {}
+  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
 
-  async create(email: string, password: string, name: string): Promise<UserDocument> {
-    const existing = await this.userModel.findOne({ email: email.toLowerCase() });
+  async create(
+    email: string,
+    password: string,
+    name: string,
+  ): Promise<UserDocument> {
+    const existing = await this.userModel.findOne({
+      email: email.toLowerCase(),
+    });
     if (existing) {
       throw new ConflictException('Email already registered');
     }
@@ -37,7 +41,11 @@ export class UsersService {
     return this.userModel.findOne({ firebaseUid });
   }
 
-  async createFromFirebase(firebaseUid: string, email: string, name: string): Promise<UserDocument> {
+  async createFromFirebase(
+    firebaseUid: string,
+    email: string,
+    name: string,
+  ): Promise<UserDocument> {
     let user = await this.userModel.findOne({ firebaseUid });
     if (user) {
       return user;
@@ -53,18 +61,18 @@ export class UsersService {
       }
     }
 
-    const randomPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+    const randomPassword =
+      Math.random().toString(36).slice(-8) +
+      Math.random().toString(36).slice(-8);
     const hashedPassword = await bcrypt.hash(randomPassword, 12);
-    
+
     user = new this.userModel({
       firebaseUid,
       email: email ? email.toLowerCase() : '',
       name: name || 'Firebase User',
       password: hashedPassword,
     });
-    
+
     return user.save();
   }
-
-
 }

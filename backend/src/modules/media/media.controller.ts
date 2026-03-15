@@ -32,7 +32,8 @@ export class MediaController {
         validators: [
           new MaxFileSizeValidator({ maxSize: 100 * 1024 * 1024 }), // 100MB
           new FileTypeValidator({
-            fileType: /(image\/(jpeg|png|gif|webp)|video\/(mp4|quicktime|x-msvideo))/,
+            fileType:
+              /(image\/(jpeg|png|gif|webp)|video\/(mp4|quicktime|x-msvideo))/,
           }),
         ],
       }),

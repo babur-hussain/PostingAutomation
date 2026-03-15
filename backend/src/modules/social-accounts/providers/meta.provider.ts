@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 
-const GRAPH_API_VERSION = 'v21.0';
+const GRAPH_API_VERSION = 'v25.0';
 
 /**
  * Shared Meta (Facebook/Instagram) OAuth provider.
@@ -27,10 +27,7 @@ export class MetaProvider {
    * Generate the Meta OAuth authorization URL.
    * Per Meta docs: https://www.facebook.com/v21.0/dialog/oauth?client_id=...
    */
-  getAuthorizationUrl(
-    scopes: string[],
-    state: string,
-  ): string {
+  getAuthorizationUrl(scopes: string[], state: string): string {
     const params = new URLSearchParams({
       client_id: this.appId,
       redirect_uri: this.redirectUri,
@@ -116,13 +113,16 @@ export class MetaProvider {
     picture?: string;
   }> {
     const axios = (await import('axios')).default;
-    const response = await axios.get(`https://graph.facebook.com/${GRAPH_API_VERSION}/me`, {
-      params: {
-        access_token: accessToken,
-        appsecret_proof: this.generateAppSecretProof(accessToken),
-        fields: 'id,name,picture',
+    const response = await axios.get(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/me`,
+      {
+        params: {
+          access_token: accessToken,
+          appsecret_proof: this.generateAppSecretProof(accessToken),
+          fields: 'id,name,picture',
+        },
       },
-    });
+    );
     return {
       id: response.data.id,
       name: response.data.name,
@@ -186,7 +186,10 @@ export class MetaProvider {
       const igAccount = response.data.instagram_business_account;
       return igAccount ? { igBusinessAccountId: igAccount.id } : null;
     } catch (error) {
-      this.logger.warn(`Failed to get IG account for page ${pageId}`, error?.response?.data || error.message);
+      this.logger.warn(
+        `Failed to get IG account for page ${pageId}`,
+        error?.response?.data || error.message,
+      );
       return null;
     }
   }

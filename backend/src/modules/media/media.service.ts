@@ -30,19 +30,29 @@ export class MediaService {
       region: this.configService.get<string>('aws.region') || 'us-east-1',
       credentials: {
         accessKeyId: this.configService.get<string>('aws.accessKeyId') || '',
-        secretAccessKey: this.configService.get<string>('aws.secretAccessKey') || '',
+        secretAccessKey:
+          this.configService.get<string>('aws.secretAccessKey') || '',
       },
     });
     this.bucketName = this.configService.get<string>('aws.s3BucketName') || '';
 
     // Local uploads fallback directory
-    this.uploadsDir = path.join(__dirname, '..', '..', '..', 'public', 'uploads');
+    this.uploadsDir = path.join(
+      __dirname,
+      '..',
+      '..',
+      '..',
+      'public',
+      'uploads',
+    );
     if (!fs.existsSync(this.uploadsDir)) {
       fs.mkdirSync(this.uploadsDir, { recursive: true });
     }
 
     // Public base URL for accessing uploaded files
-    const appUrl = this.configService.get<string>('APP_URL') || 'https://postingautomation.lfvs.in';
+    const appUrl =
+      this.configService.get<string>('APP_URL') ||
+      'https://postingautomation.lfvs.in';
     this.publicBaseUrl = appUrl;
   }
 
@@ -82,7 +92,9 @@ export class MediaService {
 
       return media.save();
     } catch (s3Error) {
-      this.logger.warn(`S3 upload failed (${s3Error.message}), falling back to local storage`);
+      this.logger.warn(
+        `S3 upload failed (${s3Error.message}), falling back to local storage`,
+      );
     }
 
     // Fallback: save to local public/uploads/ directory

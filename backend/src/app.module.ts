@@ -23,10 +23,12 @@ import { SchedulerModule } from './modules/scheduler/scheduler.module';
       envFilePath: '.env',
     }),
     MongooseModule.forRootAsync(databaseConfig),
-    ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 60,
-    }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 60,
+      },
+    ]),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'public'),
       serveRoot: '/public',
@@ -39,4 +41,4 @@ import { SchedulerModule } from './modules/scheduler/scheduler.module';
     SchedulerModule,
   ],
 })
-export class AppModule { }
+export class AppModule {}

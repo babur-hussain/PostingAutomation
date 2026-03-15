@@ -6,7 +6,11 @@ import { SocialAccountsController } from './social-accounts.controller';
 import { MetaProvider } from './providers/meta.provider';
 import { InstagramProvider } from './providers/instagram.provider';
 import { FacebookProvider } from './providers/facebook.provider';
-import { SocialAccount, SocialAccountSchema } from './schemas/social-account.schema';
+import { YouTubeProvider } from './providers/youtube.provider';
+import {
+  SocialAccount,
+  SocialAccountSchema,
+} from './schemas/social-account.schema';
 import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
 @Module({
@@ -19,7 +23,13 @@ import { UsersModule } from '../users/users.module';
     ]),
   ],
   controllers: [SocialAccountsController],
-  providers: [SocialAccountsService, MetaProvider, InstagramProvider, FacebookProvider],
+  providers: [
+    SocialAccountsService,
+    MetaProvider,
+    InstagramProvider,
+    FacebookProvider,
+    YouTubeProvider,
+  ],
   exports: [SocialAccountsService],
 })
 export class SocialAccountsModule {}

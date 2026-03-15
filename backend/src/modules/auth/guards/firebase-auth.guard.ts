@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { FirebaseService } from '../firebase.service';
 import { UsersService } from '../../users/users.service';
@@ -16,7 +21,7 @@ export class FirebaseAuthGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    
+
     if (isPublic) {
       return true;
     }
@@ -25,7 +30,9 @@ export class FirebaseAuthGuard implements CanActivate {
     const authHeader = request.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Missing or invalid Authorization header');
+      throw new UnauthorizedException(
+        'Missing or invalid Authorization header',
+      );
     }
 
     const token = authHeader.split('Bearer ')[1];
@@ -33,16 +40,20 @@ export class FirebaseAuthGuard implements CanActivate {
     try {
       const auth = this.firebaseService.getAuth();
       const decodedToken = await auth.verifyIdToken(token);
-      
+
       // Look up or create the user
       let user = await this.usersService.findByFirebaseUid(decodedToken.uid);
-      
+
       if (!user) {
         // Optional: auto-create the user if they don't exist in our DB yet
         const email = decodedToken.email || '';
         const name = decodedToken.name || email.split('@')[0];
         // We'll define createFromFirebase in usersService
-        user = await this.usersService.createFromFirebase(decodedToken.uid, email, name);
+        user = await this.usersService.createFromFirebase(
+          decodedToken.uid,
+          email,
+          name,
+        );
       }
 
       // Attach user object to the request

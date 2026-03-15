@@ -1,8 +1,4 @@
-import {
-  Controller,
-  UseGuards,
-  Get,
-} from '@nestjs/common';
+import { Controller, UseGuards, Get } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { FirebaseAuthGuard } from './guards/firebase-auth.guard';

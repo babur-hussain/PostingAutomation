@@ -13,6 +13,7 @@ export enum PostStatus {
 export enum PostPlatform {
   INSTAGRAM = 'instagram',
   FACEBOOK = 'facebook',
+  YOUTUBE = 'youtube',
 }
 
 @Schema({ timestamps: true, collection: 'posts' })

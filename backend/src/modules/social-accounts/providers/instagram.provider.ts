@@ -31,7 +31,8 @@ export class InstagramProvider {
 
   constructor(private configService: ConfigService) {
     this.appId = this.configService.get<string>('meta.instagramAppId') || '';
-    this.appSecret = this.configService.get<string>('meta.instagramAppSecret') || '';
+    this.appSecret =
+      this.configService.get<string>('meta.instagramAppSecret') || '';
     this.redirectUri = this.configService.get<string>('meta.redirectUri') || '';
   }
 
@@ -71,7 +72,9 @@ export class InstagramProvider {
     formData.append('redirect_uri', this.redirectUri);
     formData.append('code', cleanCode);
 
-    this.logger.log(`Exchanging code for token with redirect_uri: ${this.redirectUri}`);
+    this.logger.log(
+      `Exchanging code for token with redirect_uri: ${this.redirectUri}`,
+    );
 
     const response = await axios.post(
       'https://api.instagram.com/oauth/access_token',
@@ -81,12 +84,16 @@ export class InstagramProvider {
       },
     );
 
-    this.logger.log(`Token exchange raw response: ${JSON.stringify(response.data)}`);
+    this.logger.log(
+      `Token exchange raw response: ${JSON.stringify(response.data)}`,
+    );
 
     // Response: { data: [{ access_token, user_id, permissions }] }
     const tokenData = response.data.data?.[0] || response.data;
 
-    this.logger.log(`Parsed token data - user_id: ${tokenData.user_id}, has_token: ${!!tokenData.access_token}`);
+    this.logger.log(
+      `Parsed token data - user_id: ${tokenData.user_id}, has_token: ${!!tokenData.access_token}`,
+    );
 
     return {
       accessToken: tokenData.access_token,
@@ -121,7 +128,9 @@ export class InstagramProvider {
       },
     );
 
-    this.logger.log(`Long-lived token exchange response: ${JSON.stringify(response.data)}`);
+    this.logger.log(
+      `Long-lived token exchange response: ${JSON.stringify(response.data)}`,
+    );
 
     return {
       accessToken: response.data.access_token,
@@ -140,15 +149,12 @@ export class InstagramProvider {
     profilePictureUrl?: string;
   }> {
     const axios = (await import('axios')).default;
-    const response = await axios.get(
-      'https://graph.instagram.com/v21.0/me',
-      {
-        params: {
-          fields: 'user_id,username,name,profile_picture_url',
-          access_token: accessToken,
-        },
+    const response = await axios.get('https://graph.instagram.com/v21.0/me', {
+      params: {
+        fields: 'user_id,username,name,profile_picture_url',
+        access_token: accessToken,
       },
-    );
+    });
 
     return {
       userId: response.data.user_id?.toString() || response.data.id,

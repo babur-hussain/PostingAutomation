@@ -6,6 +6,7 @@ export type SocialAccountDocument = HydratedDocument<SocialAccount>;
 export enum SocialPlatform {
   INSTAGRAM = 'instagram',
   FACEBOOK = 'facebook',
+  YOUTUBE = 'youtube',
 }
 
 @Schema({ timestamps: true, collection: 'social_accounts' })
@@ -34,4 +35,7 @@ export class SocialAccount {
 
 export const SocialAccountSchema = SchemaFactory.createForClass(SocialAccount);
 
-SocialAccountSchema.index({ userId: 1, platform: 1, accountId: 1 }, { unique: true });
+SocialAccountSchema.index(
+  { userId: 1, platform: 1, accountId: 1 },
+  { unique: true },
+);

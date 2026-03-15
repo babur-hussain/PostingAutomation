@@ -8,6 +8,7 @@ import { Post, PostSchema } from '../posts/schemas/post.schema';
 import { SocialAccountsModule } from '../social-accounts/social-accounts.module';
 import { InstagramService } from '../../integrations/instagram/instagram.service';
 import { FacebookService } from '../../integrations/facebook/facebook.service';
+import { YouTubeService } from '../../integrations/youtube/youtube.service';
 import { MetaProvider } from '../social-accounts/providers/meta.provider';
 
 @Module({
@@ -37,6 +38,7 @@ import { MetaProvider } from '../social-accounts/providers/meta.provider';
     QueueWorker,
     InstagramService,
     FacebookService,
+    YouTubeService,
     MetaProvider,
   ],
   exports: [PostSchedulerService],

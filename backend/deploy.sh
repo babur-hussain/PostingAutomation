@@ -14,7 +14,6 @@ rsync -avz -e "ssh -o StrictHostKeyChecking=no -i $PEM_FILE" \
   --exclude 'node_modules' \
   --exclude 'dist' \
   --exclude '.git' \
-  --exclude '.env' \
   ./ $EC2_USER@$EC2_IP:$REMOTE_DIR/
 
 # 2. Rebuild and restart Docker containers

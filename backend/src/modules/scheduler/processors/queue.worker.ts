@@ -4,11 +4,17 @@ import { Job } from 'bullmq';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
-import { Post, PostDocument, PostStatus, PostPlatform } from '../../posts/schemas/post.schema';
+import {
+  Post,
+  PostDocument,
+  PostStatus,
+  PostPlatform,
+} from '../../posts/schemas/post.schema';
 import { SocialAccountsService } from '../../social-accounts/social-accounts.service';
 import { SocialPlatform } from '../../social-accounts/schemas/social-account.schema';
 import { InstagramService } from '../../../integrations/instagram/instagram.service';
 import { FacebookService } from '../../../integrations/facebook/facebook.service';
+import { YouTubeService } from '../../../integrations/youtube/youtube.service';
 
 @Processor('posts', { concurrency: 5 })
 export class QueueWorker extends WorkerHost {
@@ -19,6 +25,7 @@ export class QueueWorker extends WorkerHost {
     private socialAccountsService: SocialAccountsService,
     private instagramService: InstagramService,
     private facebookService: FacebookService,
+    private youtubeService: YouTubeService,
     private configService: ConfigService,
   ) {
     super();
@@ -34,7 +41,10 @@ export class QueueWorker extends WorkerHost {
       return;
     }
 
-    if (post.status !== PostStatus.PENDING && post.status !== PostStatus.PROCESSING) {
+    if (
+      post.status !== PostStatus.PENDING &&
+      post.status !== PostStatus.PROCESSING
+    ) {
       this.logger.warn(`Post ${postId} is in status ${post.status}. Skipping.`);
       return;
     }
@@ -44,10 +54,11 @@ export class QueueWorker extends WorkerHost {
     await post.save();
 
     try {
-      const accountsWithTokens = await this.socialAccountsService.getAccountsForPlatforms(
-        post.userId.toString(),
-        post.platforms as unknown as SocialPlatform[],
-      );
+      const accountsWithTokens =
+        await this.socialAccountsService.getAccountsForPlatforms(
+          post.userId.toString(),
+          post.platforms as unknown as SocialPlatform[],
+        );
 
       if (accountsWithTokens.length === 0) {
         throw new Error('No social accounts found for the specified platforms');
@@ -62,7 +73,10 @@ export class QueueWorker extends WorkerHost {
         let errorMsg: string | null = null;
 
         try {
-          if (account.platform as unknown as PostPlatform === PostPlatform.INSTAGRAM) {
+          if (
+            (account.platform as unknown as PostPlatform) ===
+            PostPlatform.INSTAGRAM
+          ) {
             platformId = await this.instagramService.publishInstagramPost(
               account.accountId,
               decryptedToken,
@@ -70,7 +84,10 @@ export class QueueWorker extends WorkerHost {
               post.caption,
             );
             success = true;
-          } else if (account.platform as unknown as PostPlatform === PostPlatform.FACEBOOK) {
+          } else if (
+            (account.platform as unknown as PostPlatform) ===
+            PostPlatform.FACEBOOK
+          ) {
             platformId = await this.facebookService.publishFacebookPost(
               account.accountId,
               decryptedToken,
@@ -78,6 +95,22 @@ export class QueueWorker extends WorkerHost {
               post.mediaUrl,
             );
             success = true;
+          } else if (
+            (account.platform as unknown as PostPlatform) ===
+            PostPlatform.YOUTUBE
+          ) {
+            // Only publish if there is a mediaUrl (video)
+            if (post.mediaUrl) {
+              platformId = await this.youtubeService.publishYouTubeVideo(
+                decryptedToken,
+                post.mediaUrl,
+                post.caption, // Using caption as title
+                post.caption, // Using caption as description
+              );
+              success = true;
+            } else {
+              throw new Error('A video is required to post to YouTube');
+            }
           }
         } catch (error) {
           success = false;
@@ -101,7 +134,6 @@ export class QueueWorker extends WorkerHost {
       await post.save();
 
       return { results };
-
     } catch (error) {
       this.logger.error(`Failed to process post ${postId}: ${error.message}`);
       post.status = PostStatus.FAILED;

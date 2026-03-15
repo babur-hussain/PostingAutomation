@@ -3,7 +3,8 @@ export default () => ({
   nodeEnv: process.env.NODE_ENV || 'development',
 
   database: {
-    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/posting-automation',
+    uri:
+      process.env.MONGODB_URI || 'mongodb://localhost:27017/posting-automation',
   },
 
   jwt: {
@@ -36,6 +37,12 @@ export default () => ({
     redirectUri: process.env.META_REDIRECT_URI,
     instagramAppId: process.env.INSTAGRAM_APP_ID,
     instagramAppSecret: process.env.INSTAGRAM_APP_SECRET,
+  },
+
+  youtube: {
+    clientId: process.env.YOUTUBE_CLIENT_ID,
+    clientSecret: process.env.YOUTUBE_CLIENT_SECRET,
+    redirectUri: process.env.YOUTUBE_REDIRECT_URI,
   },
 
   frontendUrl: process.env.FRONTEND_URL || 'exp://postingautomation.lfvs.in',

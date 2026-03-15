@@ -23,12 +23,24 @@ export class FacebookService {
       }
 
       if (this.isVideoUrl(mediaUrl)) {
-        return await this.publishVideo(pageId, pageAccessToken, mediaUrl, caption);
+        return await this.publishVideo(
+          pageId,
+          pageAccessToken,
+          mediaUrl,
+          caption,
+        );
       }
-      
-      return await this.publishPhoto(pageId, pageAccessToken, mediaUrl, caption);
+
+      return await this.publishPhoto(
+        pageId,
+        pageAccessToken,
+        mediaUrl,
+        caption,
+      );
     } catch (error) {
-      this.logger.error(`Failed to publish Facebook post: ${error?.response?.data?.error?.message || error.message}`);
+      this.logger.error(
+        `Failed to publish Facebook post: ${error?.response?.data?.error?.message || error.message}`,
+      );
       throw error;
     }
   }
@@ -38,16 +50,12 @@ export class FacebookService {
     accessToken: string,
     message: string,
   ): Promise<string> {
-    const response = await axios.post(
-      `${this.apiBase}/${pageId}/feed`,
-      null,
-      {
-        params: {
-          message,
-          access_token: accessToken,
-        },
+    const response = await axios.post(`${this.apiBase}/${pageId}/feed`, null, {
+      params: {
+        message,
+        access_token: accessToken,
       },
-    );
+    });
 
     return response.data.id;
   }

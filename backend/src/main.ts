@@ -9,7 +9,16 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: true,
+  });
+
+  // Increase body parser limits for media uploads
+  const expressApp = app.getHttpAdapter().getInstance();
+  const bodyParser = require('body-parser');
+  expressApp.use(bodyParser.json({ limit: '100mb' }));
+  expressApp.use(bodyParser.urlencoded({ limit: '100mb', extended: true }));
+
   const configService = app.get(ConfigService);
 
   // Security

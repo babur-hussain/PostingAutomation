@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsArray, IsEnum, IsDateString, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  IsEnum,
+  IsDateString,
+  MaxLength,
+} from 'class-validator';
 import { PostPlatform } from '../schemas/post.schema';
 
 export class CreatePostDto {

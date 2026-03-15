@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
 
-const GRAPH_API_VERSION = 'v22.0';
+const GRAPH_API_VERSION = 'v25.0';
 
 @Injectable()
 export class InstagramService {
@@ -25,109 +25,167 @@ export class InstagramService {
       throw new Error('Media URL is required for Instagram posting');
     }
 
-    this.logger.log(`Starting publish process for Instagram Account: ${igBusinessAccountId}`);
-    this.logger.log(`Media URL: ${mediaUrl}`);
-    this.logger.log(`Token length: ${accessToken?.length}, prefix: ${accessToken?.substring(0, 4)}`);
-
-    const apiBase = `https://graph.instagram.com/${GRAPH_API_VERSION}`;
-    const headers = {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    };
-
-    // 1. Create media container
-    const containerId = await this.createContainer(
-      apiBase, igBusinessAccountId, headers, mediaUrl, caption,
+    this.logger.log(
+      `Starting publish process for Instagram Account: ${igBusinessAccountId}`,
     );
-    this.logger.log(`Created container: ${containerId}`);
+    this.logger.log(`Media URL: ${mediaUrl}`);
+    this.logger.log(
+      `Token length: ${accessToken?.length}, prefix: ${accessToken?.substring(0, 4)}`,
+    );
 
-    // Wait for media to be ready if it's a video
-    if (this.isVideoUrl(mediaUrl)) {
-      await this.waitForMediaReady(apiBase, containerId, headers);
+    const isNativeToken = accessToken?.startsWith('IG');
+    const apiBase = isNativeToken
+      ? `https://graph.instagram.com/v21.0`
+      : `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+
+    this.logger.log(`Using API Base: ${apiBase}`);
+
+    let lastError: any = null;
+
+    try {
+      // 1. Create container
+      const containerId = await this.createContainer(
+        apiBase,
+        igBusinessAccountId,
+        accessToken,
+        mediaUrl,
+        caption,
+        isNativeToken,
+      );
+      this.logger.log(`Created container: ${containerId}`);
+
+      // Wait for media to be ready if it's a video
+      if (this.isVideoUrl(mediaUrl)) {
+        await this.waitForMediaReady(
+          apiBase,
+          containerId,
+          accessToken,
+          {},
+          isNativeToken,
+        );
+      }
+
+      // 2. Publish
+      const publishedId = await this.publishContainer(
+        apiBase,
+        igBusinessAccountId,
+        accessToken,
+        containerId,
+        isNativeToken,
+      );
+      this.logger.log(`Successfully published Instagram post: ${publishedId}`);
+      return publishedId;
+    } catch (error) {
+      const metaError = error?.response?.data?.error || error?.response?.data;
+      this.logger.error(
+        `Publishing failed: ${metaError ? JSON.stringify(metaError) : error?.message}`,
+      );
+      lastError = error;
     }
 
-    // 2. Publish the container
-    const publishedId = await this.publishContainer(
-      apiBase, igBusinessAccountId, headers, containerId,
-    );
-
-    this.logger.log(`Successfully published Instagram post: ${publishedId}`);
-    return publishedId;
+    throw lastError;
   }
 
   private async createContainer(
     apiBase: string,
     igAccountId: string,
-    headers: Record<string, string>,
+    accessToken: string,
     mediaUrl: string,
     caption: string,
+    isNativeToken: boolean,
   ): Promise<string> {
     const isVideo = this.isVideoUrl(mediaUrl);
+    const targetAccountId = isNativeToken ? 'me' : igAccountId;
+    const url = `${apiBase}/${targetAccountId}/media`;
 
-    const body: any = { caption };
+    const params = new URLSearchParams();
+    params.append('access_token', accessToken);
+    if (caption) {
+      params.append('caption', caption);
+    }
     if (isVideo) {
-      body.media_type = 'VIDEO';
-      body.video_url = mediaUrl;
+      params.append('media_type', 'VIDEO');
+      params.append('video_url', mediaUrl);
     } else {
-      body.image_url = mediaUrl;
+      params.append('image_url', mediaUrl);
     }
 
-    this.logger.log(`Creating container at ${apiBase}/${igAccountId}/media with body: ${JSON.stringify(body)}`);
-
-    const response = await axios.post(
-      `${apiBase}/${igAccountId}/media`,
-      body,
-      { headers },
-    );
-
+    this.logger.log(`POST ${url} (URLSearchParams)`);
+    const response = await axios.post(url, params.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
     return response.data.id;
   }
 
   private async publishContainer(
     apiBase: string,
     igAccountId: string,
-    headers: Record<string, string>,
+    accessToken: string,
     creationId: string,
+    isNativeToken: boolean,
   ): Promise<string> {
-    this.logger.log(`Publishing container ${creationId} at ${apiBase}/${igAccountId}/media_publish`);
+    const targetAccountId = isNativeToken ? 'me' : igAccountId;
+    const url = `${apiBase}/${targetAccountId}/media_publish`;
+    this.logger.log(`Publishing container ${creationId} at ${url}`);
 
-    const response = await axios.post(
-      `${apiBase}/${igAccountId}/media_publish`,
-      { creation_id: creationId },
-      { headers },
-    );
+    const params = new URLSearchParams();
+    params.append('creation_id', creationId);
+    params.append('access_token', accessToken);
 
+    const response = await axios.post(url, params.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
     return response.data.id;
   }
 
   private async waitForMediaReady(
     apiBase: string,
     containerId: string,
+    accessToken: string,
     headers: Record<string, string>,
+    isNativeToken: boolean,
     maxAttempts: number = 30,
     intervalMs: number = 5000,
   ): Promise<void> {
     for (let i = 0; i < maxAttempts; i++) {
-      const response = await axios.get(
-        `${apiBase}/${containerId}`,
-        {
-          params: { fields: 'status_code' },
-          headers,
-        },
-      );
+      // Try with Bearer header first, fallback to query param
+      let response: any;
+      try {
+        if (isNativeToken) {
+          response = await axios.get(`${apiBase}/${containerId}`, {
+            params: { fields: 'status_code', access_token: accessToken },
+            headers,
+          });
+        } else {
+          response = await axios.get(`${apiBase}/${containerId}`, {
+            params: { fields: 'status_code' },
+            headers,
+          });
+        }
+      } catch {
+        response = await axios.get(`${apiBase}/${containerId}`, {
+          params: { fields: 'status_code', access_token: accessToken },
+        });
+      }
 
       const status = response.data.status_code;
-      this.logger.log(`Container ${containerId} status: ${status} (attempt ${i + 1}/${maxAttempts})`);
+      this.logger.log(
+        `Container ${containerId} status: ${status} (attempt ${i + 1}/${maxAttempts})`,
+      );
 
       if (status === 'FINISHED') return;
       if (status === 'ERROR') {
-        throw new Error(`Instagram media processing failed for container ${containerId}`);
+        throw new Error(
+          `Instagram media processing failed for container ${containerId}`,
+        );
       }
 
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
 
-    throw new Error(`Instagram media processing timed out for container ${containerId}`);
+    throw new Error(
+      `Instagram media processing timed out for container ${containerId}`,
+    );
   }
 
   private isVideoUrl(url: string): boolean {

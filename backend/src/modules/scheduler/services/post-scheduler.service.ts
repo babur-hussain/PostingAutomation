@@ -6,7 +6,7 @@ import { Queue } from 'bullmq';
 export class PostSchedulerService {
   private readonly logger = new Logger(PostSchedulerService.name);
 
-  constructor(@InjectQueue('posts') private postsQueue: Queue) { }
+  constructor(@InjectQueue('posts') private postsQueue: Queue) {}
 
   async schedulePost(postId: string, scheduledTime: Date): Promise<string> {
     const delay = scheduledTime.getTime() - Date.now();
@@ -31,7 +31,9 @@ export class PostSchedulerService {
       },
     );
 
-    this.logger.log(`Scheduled post ${postId} for ${scheduledTime.toISOString()} (${job.id})`);
+    this.logger.log(
+      `Scheduled post ${postId} for ${scheduledTime.toISOString()} (${job.id})`,
+    );
     return job.id as string;
   }
 
@@ -51,7 +53,9 @@ export class PostSchedulerService {
       },
     );
 
-    this.logger.log(`Enqueued post ${postId} for immediate publishing (${job.id})`);
+    this.logger.log(
+      `Enqueued post ${postId} for immediate publishing (${job.id})`,
+    );
     return job.id as string;
   }
 

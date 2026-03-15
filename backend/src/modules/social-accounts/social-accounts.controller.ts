@@ -1,9 +1,11 @@
 import {
   Controller,
   Get,
+  Post,
   Delete,
   Param,
   Query,
+  Body,
   Res,
   UseGuards,
   HttpCode,
@@ -63,12 +65,52 @@ export class SocialAccountsController {
     }
 
     try {
-      const result = await this.socialAccountsService.handleCallback(code, state);
+      const result = await this.socialAccountsService.handleCallback(
+        code,
+        state,
+      );
       return res.redirect(
         `postingautomation://social-auth-callback?success=true&platform=${result.platform}&account=${encodeURIComponent(result.accountName)}`,
       );
     } catch (err) {
       this.logger.error('OAuth callback error', err);
+      return res.redirect(
+        `postingautomation://social-auth-callback?success=false&message=${encodeURIComponent(err.message)}`,
+      );
+    }
+  }
+
+  /**
+   * YouTube OAuth callback.
+   * This is called by Google's servers after the user authorizes.
+   */
+  @Get('youtube/callback')
+  async youtubeCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Query('error') error: string,
+    @Res() res: Response,
+  ) {
+    if (error) {
+      this.logger.warn(`YouTube OAuth error: ${error}`);
+      return res.redirect(
+        `postingautomation://social-auth-callback?success=false&message=${encodeURIComponent('Authorization was cancelled')}`,
+      );
+    }
+
+    try {
+      if (!state) {
+        throw new Error('Missing state parameter from OAuth callback');
+      }
+      const result = await this.socialAccountsService.handleCallback(
+        code,
+        state,
+      );
+      return res.redirect(
+        `postingautomation://social-auth-callback?success=true&platform=${result.platform}&account=${encodeURIComponent(result.accountName)}`,
+      );
+    } catch (err) {
+      this.logger.error('YouTube OAuth callback error', err);
       return res.redirect(
         `postingautomation://social-auth-callback?success=false&message=${encodeURIComponent(err.message)}`,
       );
@@ -96,5 +138,27 @@ export class SocialAccountsController {
   ) {
     await this.socialAccountsService.disconnectAccount(userId, accountId);
     return { message: 'Account disconnected successfully' };
+  }
+
+  /**
+   * Manually connect an Instagram account using a raw access token.
+   * For Meta app review testing — bypasses the OAuth flow.
+   */
+  @UseGuards(FirebaseAuthGuard)
+  @Post('connect-token')
+  async connectWithToken(
+    @CurrentUser('userId') userId: string,
+    @Body('platform') platform: SocialPlatform,
+    @Body('accessToken') accessToken: string,
+  ) {
+    this.logger.log(
+      `[ManualConnect] Manual token connection for platform: ${platform}`,
+    );
+    const result = await this.socialAccountsService.connectWithToken(
+      userId,
+      platform,
+      accessToken,
+    );
+    return { message: 'Account connected successfully', ...result };
   }
 }

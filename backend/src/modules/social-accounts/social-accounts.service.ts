@@ -16,6 +16,7 @@ import {
 import { MetaProvider } from './providers/meta.provider';
 import { InstagramProvider } from './providers/instagram.provider';
 import { FacebookProvider } from './providers/facebook.provider';
+import { YouTubeProvider } from './providers/youtube.provider';
 
 @Injectable()
 export class SocialAccountsService {
@@ -29,6 +30,7 @@ export class SocialAccountsService {
     private metaProvider: MetaProvider,
     private instagramProvider: InstagramProvider,
     private facebookProvider: FacebookProvider,
+    private youtubeProvider: YouTubeProvider,
   ) {
     const key = this.configService.get<string>('encryption.key');
     this.encryptionKey = Buffer.from(key || '0'.repeat(64), 'hex');
@@ -47,6 +49,8 @@ export class SocialAccountsService {
         return this.instagramProvider.getAuthorizationUrl(state);
       case SocialPlatform.FACEBOOK:
         return this.facebookProvider.getAuthorizationUrl(state);
+      case SocialPlatform.YOUTUBE:
+        return this.youtubeProvider.getAuthorizationUrl(state);
       default:
         throw new BadRequestException(`Unsupported platform: ${platform}`);
     }
@@ -73,6 +77,8 @@ export class SocialAccountsService {
       const { accessToken: longToken, expiresIn } =
         await this.metaProvider.getLongLivedToken(shortToken);
       return this.connectFacebookPage(userId, longToken, expiresIn);
+    } else if (platform === SocialPlatform.YOUTUBE) {
+      return this.handleYouTubeCallback(userId, code);
     }
 
     throw new BadRequestException('Unsupported platform');
@@ -94,12 +100,15 @@ export class SocialAccountsService {
     let token = shortToken;
     let expiresIn = 3600; // short-lived = 1 hour
     try {
-      const longLived = await this.instagramProvider.getLongLivedToken(shortToken);
+      const longLived =
+        await this.instagramProvider.getLongLivedToken(shortToken);
       token = longLived.accessToken;
       expiresIn = longLived.expiresIn;
       this.logger.log('Successfully obtained long-lived Instagram token');
     } catch (err) {
-      const errBody = err?.response?.data ? JSON.stringify(err.response.data) : err?.message;
+      const errBody = err?.response?.data
+        ? JSON.stringify(err.response.data)
+        : err?.message;
       this.logger.warn(`Failed to get long-lived token: ${errBody}`);
     }
 
@@ -118,7 +127,9 @@ export class SocialAccountsService {
       profile = await this.instagramProvider.getUserProfile(token);
       this.logger.log(`Got Instagram profile: ${profile.username}`);
     } catch (err) {
-      const errBody = err?.response?.data ? JSON.stringify(err.response.data) : err?.message;
+      const errBody = err?.response?.data
+        ? JSON.stringify(err.response.data)
+        : err?.message;
       this.logger.warn(`Failed to get Instagram profile: ${errBody}`);
     }
 
@@ -146,30 +157,99 @@ export class SocialAccountsService {
     };
   }
 
-  async connectFacebookPage(userId: string, accessToken: string, expiresIn: number) {
+  async connectFacebookPage(
+    userId: string,
+    accessToken: string,
+    expiresIn: number,
+  ) {
     const pages = await this.metaProvider.getUserPages(accessToken);
-    if (!pages.length) {
-      throw new BadRequestException('No Facebook Pages found for this account. Make sure you have created a Page.');
+    if (!pages || !pages.length) {
+      throw new BadRequestException(
+        'No Facebook Pages found for this account. Make sure you have created a Page.',
+      );
     }
 
-    const page = pages[0]; // Connecting the first page found
-    const encryptedToken = this.encrypt(page.accessToken);
+    this.logger.log(`Found ${pages.length} Facebook Pages to connect...`);
+
+    const connectedNames: string[] = [];
+
+    // Connect ALL pages the user manages
+    for (const page of pages) {
+      const encryptedToken = this.encrypt(page.accessToken);
+
+      await this.socialAccountModel.findOneAndUpdate(
+        {
+          userId: new Types.ObjectId(userId),
+          platform: SocialPlatform.FACEBOOK,
+          accountId: page.id,
+        },
+        {
+          accessToken: encryptedToken,
+          tokenExpiry: new Date(Date.now() + expiresIn * 1000),
+          accountName: page.name,
+          profilePicture: page.picture || null,
+        },
+        { upsert: true, new: true },
+      );
+
+      connectedNames.push(page.name);
+    }
+
+    return {
+      platform: SocialPlatform.FACEBOOK as SocialPlatform,
+      accountName:
+        connectedNames.length > 1
+          ? `${connectedNames.length} Pages connected`
+          : connectedNames[0],
+    };
+  }
+
+  /**
+   * Handle YouTube / Google OAuth callback.
+   * Exchanges code for tokens, gets channel info, stores with refresh token.
+   */
+  private async handleYouTubeCallback(
+    userId: string,
+    code: string,
+  ): Promise<{ platform: SocialPlatform; accountName: string }> {
+    // 1. Exchange code for access + refresh tokens
+    const { accessToken, refreshToken, expiresIn } =
+      await this.youtubeProvider.exchangeCodeForTokens(code);
+
+    this.logger.log('Successfully obtained YouTube tokens');
+
+    // 2. Get YouTube channel info
+    const channelInfo = await this.youtubeProvider.getChannelInfo(accessToken);
+    this.logger.log(
+      `Got YouTube channel: ${channelInfo.channelTitle} (${channelInfo.channelId})`,
+    );
+
+    // 3. Store the account with encrypted tokens
+    const encryptedAccessToken = this.encrypt(accessToken);
+    const encryptedRefreshToken = refreshToken
+      ? this.encrypt(refreshToken)
+      : null;
 
     await this.socialAccountModel.findOneAndUpdate(
       {
         userId: new Types.ObjectId(userId),
-        platform: SocialPlatform.FACEBOOK,
-        accountId: page.id,
+        platform: SocialPlatform.YOUTUBE,
+        accountId: channelInfo.channelId,
       },
       {
-        accessToken: encryptedToken,
+        accessToken: encryptedAccessToken,
+        refreshToken: encryptedRefreshToken,
         tokenExpiry: new Date(Date.now() + expiresIn * 1000),
-        accountName: page.name,
+        accountName: channelInfo.channelTitle,
+        profilePicture: channelInfo.thumbnailUrl || null,
       },
       { upsert: true, new: true },
     );
 
-    return { platform: SocialPlatform.FACEBOOK, accountName: page.name };
+    return {
+      platform: SocialPlatform.YOUTUBE,
+      accountName: channelInfo.channelTitle,
+    };
   }
 
   async getAccounts(userId: string): Promise<SocialAccountDocument[]> {
@@ -189,10 +269,89 @@ export class SocialAccountsService {
     }
   }
 
+  /**
+   * Manually connect an Instagram account using a raw access token.
+   * For testing / Meta app review — bypasses the OAuth code exchange flow.
+   */
+  async connectWithToken(
+    userId: string,
+    platform: SocialPlatform,
+    accessToken: string,
+  ): Promise<{ platform: SocialPlatform; accountName: string }> {
+    if (platform !== SocialPlatform.INSTAGRAM) {
+      throw new BadRequestException(
+        'Manual token connection is currently only supported for Instagram',
+      );
+    }
+
+    // Determine proper Business Account ID by querying connected pages
+    let businessAccountId = 'unknown';
+    let accountName = 'Instagram User';
+    const profilePictureUrl = null;
+
+    try {
+      // Query Facebook Pages connected to this user token to find linked Instagram Business Accounts
+      const response = await require('axios').get(
+        `https://graph.facebook.com/v22.0/me/accounts?fields=instagram_business_account,name,picture&access_token=${accessToken}`,
+      );
+
+      const pages = response.data.data || [];
+      const pageWithIg = pages.find((p: any) => p.instagram_business_account);
+
+      if (pageWithIg) {
+        businessAccountId = pageWithIg.instagram_business_account.id;
+        accountName = pageWithIg.name; // fallback to page name if IG profile fails
+        this.logger.log(
+          `[ManualConnect] Found linked IG Business ID: ${businessAccountId} on Page: ${pageWithIg.name}`,
+        );
+      } else {
+        this.logger.warn(
+          `[ManualConnect] No linked Instagram Business account found on user's pages.`,
+        );
+      }
+
+      // Also try to get the basic Instagram profile for name/picture using the basic display API
+      const profile = await this.instagramProvider.getUserProfile(accessToken);
+      if (profile.username) accountName = profile.username;
+    } catch (err) {
+      const errBody = err?.response?.data
+        ? JSON.stringify(err.response.data)
+        : err?.message;
+      this.logger.warn(
+        `[ManualConnect] Failed to fetch business account ID or profile: ${errBody}`,
+      );
+    }
+
+    // Encrypt and store
+    const encryptedToken = this.encrypt(accessToken);
+
+    await this.socialAccountModel.findOneAndUpdate(
+      {
+        userId: new Types.ObjectId(userId),
+        platform: SocialPlatform.INSTAGRAM,
+        accountId: businessAccountId, // Store the dynamically fetched Business Account ID
+      },
+      {
+        accessToken: encryptedToken,
+        tokenExpiry: new Date(Date.now() + 5184000 * 1000), // ~60 days
+        accountName,
+        profilePicture: profilePictureUrl,
+      },
+      { upsert: true, new: true },
+    );
+
+    return {
+      platform: SocialPlatform.INSTAGRAM,
+      accountName,
+    };
+  }
+
   async getAccountsForPlatforms(
     userId: string,
     platforms: SocialPlatform[],
-  ): Promise<Array<{ account: SocialAccountDocument; decryptedToken: string }>> {
+  ): Promise<
+    Array<{ account: SocialAccountDocument; decryptedToken: string }>
+  > {
     const accounts = await this.socialAccountModel.find({
       userId: new Types.ObjectId(userId),
       platform: { $in: platforms },
@@ -217,7 +376,11 @@ export class SocialAccountsService {
     const [ivHex, authTagHex, encrypted] = encryptedText.split(':');
     const iv = Buffer.from(ivHex, 'hex');
     const authTag = Buffer.from(authTagHex, 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-gcm', this.encryptionKey, iv);
+    const decipher = crypto.createDecipheriv(
+      'aes-256-gcm',
+      this.encryptionKey,
+      iv,
+    );
     decipher.setAuthTag(authTag);
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');

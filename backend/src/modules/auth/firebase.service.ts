@@ -11,7 +11,7 @@ export class FirebaseService implements OnModuleInit {
     if (admin.apps.length === 0) {
       try {
         const keyPath = path.resolve(process.cwd(), 'firebase-adminsdk.json');
-        
+
         if (fs.existsSync(keyPath)) {
           const serviceAccount = require(keyPath);
           admin.initializeApp({
@@ -20,7 +20,7 @@ export class FirebaseService implements OnModuleInit {
           this.logger.log('Firebase Admin SDK initialized successfully');
         } else {
           this.logger.warn(
-            'Firebase Admin SDK configuration not found. Application will start but Auth may fail. Place firebase-adminsdk.json in the root backend folder.'
+            'Firebase Admin SDK configuration not found. Application will start but Auth may fail. Place firebase-adminsdk.json in the root backend folder.',
           );
           // Fallback initialization without credentials (might fail depending on operations)
           admin.initializeApp();

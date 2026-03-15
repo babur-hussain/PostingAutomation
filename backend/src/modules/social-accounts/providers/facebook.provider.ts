@@ -15,6 +15,9 @@ export class FacebookProvider {
   constructor(private metaProvider: MetaProvider) {}
 
   getAuthorizationUrl(state: string): string {
-    return this.metaProvider.getAuthorizationUrl(FacebookProvider.SCOPES, state);
+    return this.metaProvider.getAuthorizationUrl(
+      FacebookProvider.SCOPES,
+      state,
+    );
   }
 }

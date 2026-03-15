@@ -28,4 +28,3 @@ export class JwtAuthGuard extends FirebaseAuthGuard {
     return super.canActivate(context);
   }
 }
-

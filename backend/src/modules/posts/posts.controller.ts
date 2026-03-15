@@ -21,12 +21,18 @@ export class PostsController {
   constructor(private readonly postsService: PostsService) {}
 
   @Post()
-  create(@CurrentUser('userId') userId: string, @Body() createPostDto: CreatePostDto) {
+  create(
+    @CurrentUser('userId') userId: string,
+    @Body() createPostDto: CreatePostDto,
+  ) {
     return this.postsService.create(userId, createPostDto);
   }
 
   @Get()
-  findAll(@CurrentUser('userId') userId: string, @Query() pagination: PaginationDto) {
+  findAll(
+    @CurrentUser('userId') userId: string,
+    @Query() pagination: PaginationDto,
+  ) {
     return this.postsService.findAll(userId, pagination.page);
   }
 

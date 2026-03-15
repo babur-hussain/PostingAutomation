@@ -3,7 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
 import { SocialAccountsService } from './social-accounts.service';
 import { SocialAccountsController } from './social-accounts.controller';
-import { MetaProvider } from './providers/meta.provider';
+
 import { InstagramProvider } from './providers/instagram.provider';
 import { FacebookProvider } from './providers/facebook.provider';
 import { YouTubeProvider } from './providers/youtube.provider';
@@ -25,11 +25,10 @@ import { UsersModule } from '../users/users.module';
   controllers: [SocialAccountsController],
   providers: [
     SocialAccountsService,
-    MetaProvider,
     InstagramProvider,
     FacebookProvider,
     YouTubeProvider,
   ],
   exports: [SocialAccountsService],
 })
-export class SocialAccountsModule {}
+export class SocialAccountsModule { }

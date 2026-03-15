@@ -13,7 +13,7 @@ import {
   SocialAccountDocument,
   SocialPlatform,
 } from './schemas/social-account.schema';
-import { MetaProvider } from './providers/meta.provider';
+
 import { InstagramProvider } from './providers/instagram.provider';
 import { FacebookProvider } from './providers/facebook.provider';
 import { YouTubeProvider } from './providers/youtube.provider';
@@ -27,7 +27,6 @@ export class SocialAccountsService {
     @InjectModel(SocialAccount.name)
     private socialAccountModel: Model<SocialAccountDocument>,
     private configService: ConfigService,
-    private metaProvider: MetaProvider,
     private instagramProvider: InstagramProvider,
     private facebookProvider: FacebookProvider,
     private youtubeProvider: YouTubeProvider,
@@ -70,18 +69,35 @@ export class SocialAccountsService {
     if (platform === SocialPlatform.INSTAGRAM) {
       // Instagram Business Login: use Instagram's own token exchange
       return this.handleInstagramCallback(userId, code);
-    } else if (platform === SocialPlatform.FACEBOOK) {
-      // Facebook Login: use Meta/Facebook token exchange
-      const { accessToken: shortToken } =
-        await this.metaProvider.exchangeCodeForToken(code);
-      const { accessToken: longToken, expiresIn } =
-        await this.metaProvider.getLongLivedToken(shortToken);
-      return this.connectFacebookPage(userId, longToken, expiresIn);
     } else if (platform === SocialPlatform.YOUTUBE) {
       return this.handleYouTubeCallback(userId, code);
     }
 
     throw new BadRequestException('Unsupported platform');
+  }
+
+  /**
+   * Handle the Facebook OAuth callback explicitly.
+   * Completely isolated from Instagram logic.
+   */
+  async handleFacebookCallback(
+    code: string,
+    state: string,
+  ): Promise<{ platform: SocialPlatform; accountName: string }> {
+    const stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
+    const { userId, platform } = stateData;
+
+    if (platform !== SocialPlatform.FACEBOOK) {
+      throw new BadRequestException('Expected Facebook platform for this callback');
+    }
+
+    // Facebook Login: use standalone Facebook token exchange
+    const { accessToken: shortToken } =
+      await this.facebookProvider.exchangeCodeForToken(code);
+    const { accessToken: longToken, expiresIn } =
+      await this.facebookProvider.getLongLivedToken(shortToken);
+
+    return this.connectFacebookPage(userId, longToken, expiresIn);
   }
 
   /**
@@ -162,7 +178,7 @@ export class SocialAccountsService {
     accessToken: string,
     expiresIn: number,
   ) {
-    const pages = await this.metaProvider.getUserPages(accessToken);
+    const pages = await this.facebookProvider.getUserPages(accessToken);
     if (!pages || !pages.length) {
       throw new BadRequestException(
         'No Facebook Pages found for this account. Make sure you have created a Page.',

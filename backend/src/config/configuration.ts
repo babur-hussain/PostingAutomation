@@ -39,6 +39,12 @@ export default () => ({
     instagramAppSecret: process.env.INSTAGRAM_APP_SECRET,
   },
 
+  facebook: {
+    appId: process.env.FACEBOOK_APP_ID,
+    appSecret: process.env.FACEBOOK_APP_SECRET,
+    redirectUri: process.env.FACEBOOK_REDIRECT_URI,
+  },
+
   youtube: {
     clientId: process.env.YOUTUBE_CLIENT_ID,
     clientSecret: process.env.YOUTUBE_CLIENT_SECRET,

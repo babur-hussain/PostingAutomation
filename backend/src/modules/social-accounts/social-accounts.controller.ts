@@ -26,7 +26,7 @@ export class SocialAccountsController {
   constructor(
     private socialAccountsService: SocialAccountsService,
     private configService: ConfigService,
-  ) {}
+  ) { }
 
   /**
    * Returns the Meta OAuth authorization URL as JSON.
@@ -74,6 +74,41 @@ export class SocialAccountsController {
       );
     } catch (err) {
       this.logger.error('OAuth callback error', err);
+      return res.redirect(
+        `postingautomation://social-auth-callback?success=false&message=${encodeURIComponent(err.message)}`,
+      );
+    }
+  }
+
+  /**
+   * Facebook OAuth callback.
+   * Completely decoupled from the instagram flow.
+   */
+  @Get('facebook/callback')
+  async facebookCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Query('error') error: string,
+    @Query('error_description') errorDescription: string,
+    @Res() res: Response,
+  ) {
+    if (error) {
+      this.logger.warn(`Facebook OAuth error: ${error} - ${errorDescription}`);
+      return res.redirect(
+        `postingautomation://social-auth-callback?success=false&message=${encodeURIComponent(errorDescription || 'Authorization was cancelled')}`,
+      );
+    }
+
+    try {
+      const result = await this.socialAccountsService.handleFacebookCallback(
+        code,
+        state,
+      );
+      return res.redirect(
+        `postingautomation://social-auth-callback?success=true&platform=${result.platform}&account=${encodeURIComponent(result.accountName)}`,
+      );
+    } catch (err) {
+      this.logger.error('Facebook OAuth callback error', err);
       return res.redirect(
         `postingautomation://social-auth-callback?success=false&message=${encodeURIComponent(err.message)}`,
       );

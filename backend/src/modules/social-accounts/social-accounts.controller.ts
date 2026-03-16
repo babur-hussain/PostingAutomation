@@ -40,7 +40,7 @@ export class SocialAccountsController {
     @Param('platform') platform: SocialPlatform,
     @CurrentUser('userId') userId: string,
   ) {
-    const url = this.socialAccountsService.getConnectUrl(platform, userId);
+    const url = await this.socialAccountsService.getConnectUrl(platform, userId);
     return { url };
   }
 
@@ -154,6 +154,47 @@ export class SocialAccountsController {
   }
 
   /**
+   * X (Twitter) OAuth callback.
+   * This is called by X's servers after the user authorizes via OAuth 1.0a.
+   */
+  @Get('x/callback')
+  async xCallback(
+    @Query('oauth_token') oauthToken: string,
+    @Query('oauth_verifier') oauthVerifier: string,
+    @Query('denied') denied: string,
+    @Res() res: Response,
+  ) {
+    if (denied) {
+      this.logger.warn(`X OAuth denied by user: ${denied}`);
+      return res.redirect(
+        `postingautomation://social-auth-callback?success=false&message=${encodeURIComponent('Authorization was cancelled')}`,
+      );
+    }
+
+    if (!oauthToken || !oauthVerifier) {
+      this.logger.warn(`X OAuth missing tokens in callback`);
+      return res.redirect(
+        `postingautomation://social-auth-callback?success=false&message=${encodeURIComponent('Missing OAuth tokens from X')}`,
+      );
+    }
+
+    try {
+      const result = await this.socialAccountsService.handleXCallback(
+        oauthToken,
+        oauthVerifier,
+      );
+      return res.redirect(
+        `postingautomation://social-auth-callback?success=true&platform=${result.platform}&account=${encodeURIComponent(result.accountName)}`,
+      );
+    } catch (err: any) {
+      this.logger.error('X OAuth callback error', err);
+      return res.redirect(
+        `postingautomation://social-auth-callback?success=false&message=${encodeURIComponent(err.message)}`,
+      );
+    }
+  }
+
+  /**
    * Get all connected social accounts.
    */
   @UseGuards(FirebaseAuthGuard)
@@ -186,29 +227,16 @@ export class SocialAccountsController {
     @CurrentUser('userId') userId: string,
     @Body('platform') platform: SocialPlatform,
     @Body('accessToken') accessToken: string,
-    @Body('accessSecret') accessSecret?: string,
   ) {
     this.logger.log(
       `[ManualConnect] Manual token connection for platform: ${platform}`,
     );
 
-    let result;
-    if (platform === SocialPlatform.X) {
-      if (!accessSecret) {
-        throw new BadRequestException('accessSecret is required for X Manual Connection (OAuth 1.0a implies a secret)');
-      }
-      result = await this.socialAccountsService.connectXWithToken(
-        userId,
-        accessToken,
-        accessSecret,
-      );
-    } else {
-      result = await this.socialAccountsService.connectWithToken(
-        userId,
-        platform,
-        accessToken,
-      );
-    }
+    const result = await this.socialAccountsService.connectWithToken(
+      userId,
+      platform,
+      accessToken,
+    );
 
     return { message: 'Account connected successfully', ...result };
   }

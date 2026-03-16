@@ -40,7 +40,7 @@ export class SocialAccountsService {
   /**
    * Get the OAuth authorization URL for the given platform.
    */
-  getConnectUrl(platform: SocialPlatform, userId: string): string {
+  async getConnectUrl(platform: SocialPlatform, userId: string): Promise<string> {
     const state = Buffer.from(
       JSON.stringify({ userId, platform, ts: Date.now() }),
     ).toString('base64url');
@@ -52,6 +52,8 @@ export class SocialAccountsService {
         return this.facebookProvider.getAuthorizationUrl(state);
       case SocialPlatform.YOUTUBE:
         return this.youtubeProvider.getAuthorizationUrl(state);
+      case SocialPlatform.X:
+        return this.xProvider.getAuthorizationUrl(userId);
       default:
         throw new BadRequestException(`Unsupported platform: ${platform}`);
     }
@@ -365,38 +367,40 @@ export class SocialAccountsService {
   }
 
   /**
-   * Manually connect an X (Twitter) account using raw access tokens.
+   * Handle X (Twitter) OAuth 1.0a callback.
+   * Exchanges the temporary token + verifier for permanent tokens.
    */
-  async connectXWithToken(
-    userId: string,
-    accessToken: string,
-    accessSecret: string,
+  async handleXCallback(
+    oauthToken: string,
+    oauthVerifier: string,
   ): Promise<{ platform: SocialPlatform; accountName: string }> {
-    const { accountId, accountName, validatedToken, validatedSecret } =
-      await this.xProvider.verifyAndGetAccountInfo(accessToken, accessSecret);
+    const tokenData = await this.xProvider.exchangeTokens(
+      oauthToken,
+      oauthVerifier,
+    );
 
-    const encryptedToken = this.encrypt(validatedToken);
-    const encryptedSecret = this.encrypt(validatedSecret);
+    const encryptedAccessToken = this.encrypt(tokenData.accessToken);
+    const encryptedAccessSecret = this.encrypt(tokenData.accessSecret);
 
     await this.socialAccountModel.findOneAndUpdate(
       {
-        userId: new Types.ObjectId(userId),
+        userId: new Types.ObjectId(tokenData.userId),
         platform: SocialPlatform.X,
-        accountId,
+        accountId: tokenData.accountId,
       },
       {
-        accessToken: encryptedToken,
-        // We multiplex the refresh token column to store the X access secret
-        refreshToken: encryptedSecret,
-        tokenExpiry: new Date(Date.now() + 315360000 * 1000), // ~10 years (non-expiring)
-        accountName,
+        accessToken: encryptedAccessToken,
+        refreshToken: encryptedAccessSecret, // Store OAuth 1.0a secret in refreshToken field
+        tokenExpiry: null, // OAuth 1.0a tokens don't expire securely
+        accountName: tokenData.accountName,
+        profilePicture: null,
       },
       { upsert: true, new: true },
     );
 
     return {
-      platform: SocialPlatform.X,
-      accountName,
+      platform: SocialPlatform.X as SocialPlatform,
+      accountName: tokenData.accountName,
     };
   }
 

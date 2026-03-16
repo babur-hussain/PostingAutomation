@@ -17,6 +17,7 @@ import {
 import { InstagramProvider } from './providers/instagram.provider';
 import { FacebookProvider } from './providers/facebook.provider';
 import { YouTubeProvider } from './providers/youtube.provider';
+import { XProvider } from './providers/x.provider';
 
 @Injectable()
 export class SocialAccountsService {
@@ -30,6 +31,7 @@ export class SocialAccountsService {
     private instagramProvider: InstagramProvider,
     private facebookProvider: FacebookProvider,
     private youtubeProvider: YouTubeProvider,
+    private xProvider: XProvider,
   ) {
     const key = this.configService.get<string>('encryption.key');
     this.encryptionKey = Buffer.from(key || '0'.repeat(64), 'hex');
@@ -362,21 +364,69 @@ export class SocialAccountsService {
     };
   }
 
+  /**
+   * Manually connect an X (Twitter) account using raw access tokens.
+   */
+  async connectXWithToken(
+    userId: string,
+    accessToken: string,
+    accessSecret: string,
+  ): Promise<{ platform: SocialPlatform; accountName: string }> {
+    const { accountId, accountName, validatedToken, validatedSecret } =
+      await this.xProvider.verifyAndGetAccountInfo(accessToken, accessSecret);
+
+    const encryptedToken = this.encrypt(validatedToken);
+    const encryptedSecret = this.encrypt(validatedSecret);
+
+    await this.socialAccountModel.findOneAndUpdate(
+      {
+        userId: new Types.ObjectId(userId),
+        platform: SocialPlatform.X,
+        accountId,
+      },
+      {
+        accessToken: encryptedToken,
+        // We multiplex the refresh token column to store the X access secret
+        refreshToken: encryptedSecret,
+        tokenExpiry: new Date(Date.now() + 315360000 * 1000), // ~10 years (non-expiring)
+        accountName,
+      },
+      { upsert: true, new: true },
+    );
+
+    return {
+      platform: SocialPlatform.X,
+      accountName,
+    };
+  }
+
   async getAccountsForPlatforms(
     userId: string,
     platforms: SocialPlatform[],
   ): Promise<
-    Array<{ account: SocialAccountDocument; decryptedToken: string }>
+    Array<{
+      account: SocialAccountDocument;
+      decryptedToken: string;
+      decryptedSecret?: string;
+    }>
   > {
     const accounts = await this.socialAccountModel.find({
       userId: new Types.ObjectId(userId),
       platform: { $in: platforms },
     });
 
-    return accounts.map((account) => ({
-      account,
-      decryptedToken: this.decrypt(account.accessToken),
-    }));
+    return accounts.map((account) => {
+      const result: any = {
+        account,
+        decryptedToken: this.decrypt(account.accessToken),
+      };
+
+      if (account.refreshToken) {
+        result.decryptedSecret = this.decrypt(account.refreshToken);
+      }
+
+      return result;
+    });
   }
 
   private encrypt(text: string): string {

@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
+  BadRequestException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -176,8 +177,8 @@ export class SocialAccountsController {
   }
 
   /**
-   * Manually connect an Instagram account using a raw access token.
-   * For Meta app review testing — bypasses the OAuth flow.
+   * Manually connect an Instagram or X account using a raw access token.
+   * For testing / App review — bypasses the OAuth flow.
    */
   @UseGuards(FirebaseAuthGuard)
   @Post('connect-token')
@@ -185,15 +186,30 @@ export class SocialAccountsController {
     @CurrentUser('userId') userId: string,
     @Body('platform') platform: SocialPlatform,
     @Body('accessToken') accessToken: string,
+    @Body('accessSecret') accessSecret?: string,
   ) {
     this.logger.log(
       `[ManualConnect] Manual token connection for platform: ${platform}`,
     );
-    const result = await this.socialAccountsService.connectWithToken(
-      userId,
-      platform,
-      accessToken,
-    );
+
+    let result;
+    if (platform === SocialPlatform.X) {
+      if (!accessSecret) {
+        throw new BadRequestException('accessSecret is required for X Manual Connection (OAuth 1.0a implies a secret)');
+      }
+      result = await this.socialAccountsService.connectXWithToken(
+        userId,
+        accessToken,
+        accessSecret,
+      );
+    } else {
+      result = await this.socialAccountsService.connectWithToken(
+        userId,
+        platform,
+        accessToken,
+      );
+    }
+
     return { message: 'Account connected successfully', ...result };
   }
 }

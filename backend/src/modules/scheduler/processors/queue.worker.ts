@@ -15,6 +15,7 @@ import { SocialPlatform } from '../../social-accounts/schemas/social-account.sch
 import { InstagramService } from '../../../integrations/instagram/instagram.service';
 import { FacebookService } from '../../../integrations/facebook/facebook.service';
 import { YouTubeService } from '../../../integrations/youtube/youtube.service';
+import { XService } from '../../../integrations/x/x.service';
 
 @Processor('posts', { concurrency: 5 })
 export class QueueWorker extends WorkerHost {
@@ -26,6 +27,7 @@ export class QueueWorker extends WorkerHost {
     private instagramService: InstagramService,
     private facebookService: FacebookService,
     private youtubeService: YouTubeService,
+    private xService: XService,
     private configService: ConfigService,
   ) {
     super();
@@ -111,6 +113,26 @@ export class QueueWorker extends WorkerHost {
             } else {
               throw new Error('A video is required to post to YouTube');
             }
+          } else if (
+            (account.platform as unknown as PostPlatform) ===
+            PostPlatform.X
+          ) {
+            const appKey = this.configService.get<string>('x.consumerKey');
+            const appSecret = this.configService.get<string>('x.consumerSecret');
+            
+            if (!appKey || !appSecret) {
+              throw new Error('X API Consumer Key and Secret are not configured.');
+            }
+
+            platformId = await this.xService.publishTweet(
+              appKey,
+              appSecret,
+              decryptedToken,
+              accountItem.decryptedSecret || '', // Must be returned from getAccountsForPlatforms overlay
+              post.caption,
+              post.mediaUrl,
+            );
+            success = true;
           }
         } catch (error) {
           success = false;

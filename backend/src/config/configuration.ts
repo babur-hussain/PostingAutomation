@@ -51,5 +51,13 @@ export default () => ({
     redirectUri: process.env.YOUTUBE_REDIRECT_URI,
   },
 
+  x: {
+    consumerKey: process.env.X_CONSUMER_KEY,
+    consumerSecret: process.env.X_CONSUMER_SECRET,
+    accessToken: process.env.X_ACCESS_TOKEN,
+    accessSecret: process.env.X_ACCESS_TOKEN_SECRET,
+    bearerToken: process.env.X_BEARER_TOKEN,
+  },
+
   frontendUrl: process.env.FRONTEND_URL || 'exp://postingautomation.lfvs.in',
 });

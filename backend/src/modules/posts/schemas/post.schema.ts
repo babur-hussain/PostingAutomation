@@ -14,6 +14,7 @@ export enum PostPlatform {
   INSTAGRAM = 'instagram',
   FACEBOOK = 'facebook',
   YOUTUBE = 'youtube',
+  X = 'x',
 }
 
 @Schema({ timestamps: true, collection: 'posts' })

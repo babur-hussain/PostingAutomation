@@ -9,6 +9,7 @@ import { SocialAccountsModule } from '../social-accounts/social-accounts.module'
 import { InstagramService } from '../../integrations/instagram/instagram.service';
 import { FacebookService } from '../../integrations/facebook/facebook.service';
 import { YouTubeService } from '../../integrations/youtube/youtube.service';
+import { XService } from '../../integrations/x/x.service';
 
 @Module({
   imports: [

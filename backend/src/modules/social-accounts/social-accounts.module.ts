@@ -7,6 +7,7 @@ import { SocialAccountsController } from './social-accounts.controller';
 import { InstagramProvider } from './providers/instagram.provider';
 import { FacebookProvider } from './providers/facebook.provider';
 import { YouTubeProvider } from './providers/youtube.provider';
+import { XProvider } from './providers/x.provider';
 import {
   SocialAccount,
   SocialAccountSchema,
@@ -28,6 +29,7 @@ import { UsersModule } from '../users/users.module';
     InstagramProvider,
     FacebookProvider,
     YouTubeProvider,
+    XProvider,
   ],
   exports: [SocialAccountsService],
 })

@@ -39,7 +39,7 @@ import { XService } from '../../integrations/x/x.service';
     InstagramService,
     FacebookService,
     YouTubeService,
-
+    XService,
   ],
   exports: [PostSchedulerService],
 })

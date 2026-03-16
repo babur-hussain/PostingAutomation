@@ -18,6 +18,7 @@ import { InstagramProvider } from './providers/instagram.provider';
 import { FacebookProvider } from './providers/facebook.provider';
 import { YouTubeProvider } from './providers/youtube.provider';
 import { XProvider } from './providers/x.provider';
+import { ThreadsProvider } from './providers/threads.provider';
 
 @Injectable()
 export class SocialAccountsService {
@@ -32,6 +33,7 @@ export class SocialAccountsService {
     private facebookProvider: FacebookProvider,
     private youtubeProvider: YouTubeProvider,
     private xProvider: XProvider,
+    private threadsProvider: ThreadsProvider,
   ) {
     const key = this.configService.get<string>('encryption.key');
     this.encryptionKey = Buffer.from(key || '0'.repeat(64), 'hex');
@@ -54,6 +56,8 @@ export class SocialAccountsService {
         return this.youtubeProvider.getAuthorizationUrl(state);
       case SocialPlatform.X:
         return this.xProvider.getAuthorizationUrl(userId);
+      case SocialPlatform.THREADS:
+        return this.threadsProvider.getAuthorizationUrl(state);
       default:
         throw new BadRequestException(`Unsupported platform: ${platform}`);
     }
@@ -102,6 +106,78 @@ export class SocialAccountsService {
       await this.facebookProvider.getLongLivedToken(shortToken);
 
     return this.connectFacebookPage(userId, longToken, expiresIn);
+  }
+
+  /**
+   * Handle the Threads OAuth callback strictly isolated.
+   */
+  async handleThreadsCallback(
+    code: string,
+    state: string,
+  ): Promise<{ platform: SocialPlatform; accountName: string }> {
+    const stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
+    const { userId, platform } = stateData;
+
+    if (platform !== SocialPlatform.THREADS) {
+      throw new BadRequestException('Expected Threads platform for this callback');
+    }
+
+    // Exchange for short token
+    const { accessToken: shortToken, userId: threadsUserId } =
+      await this.threadsProvider.exchangeCodeForToken(code);
+
+    // Try to get long lived token
+    let token = shortToken;
+    let expiresIn = 3600;
+    try {
+      const longLived = await this.threadsProvider.getLongLivedToken(shortToken);
+      token = longLived.accessToken;
+      expiresIn = longLived.expiresIn;
+      this.logger.log('Successfully obtained long-lived Threads token');
+    } catch (err) {
+      const errBody = err?.response?.data
+        ? JSON.stringify(err.response.data)
+        : err?.message;
+      this.logger.warn(`Failed to get long-lived Threads token: ${errBody}`);
+    }
+
+    // Get user profile
+    let profile: any = {
+      id: threadsUserId,
+      username: `threads_user_${threadsUserId}`,
+      name: `Threads User`,
+    };
+    try {
+      profile = await this.threadsProvider.getUserProfile(token);
+    } catch (err: any) {
+      const errBody = err?.response?.data
+        ? JSON.stringify(err.response.data)
+        : err?.message;
+      this.logger.warn(`Failed to get Threads profile: ${errBody}`);
+    }
+
+    // Store the account
+    const encryptedToken = this.encrypt(token);
+
+    await this.socialAccountModel.findOneAndUpdate(
+      {
+        userId: new Types.ObjectId(userId),
+        platform: SocialPlatform.THREADS,
+        accountId: profile.id,
+      },
+      {
+        accessToken: encryptedToken,
+        tokenExpiry: new Date(Date.now() + expiresIn * 1000),
+        accountName: profile.username || profile.name,
+        profilePicture: profile.threadsProfilePictureUrl || null,
+      },
+      { upsert: true, new: true },
+    );
+
+    return {
+      platform: SocialPlatform.THREADS,
+      accountName: profile.username || profile.name,
+    };
   }
 
   /**

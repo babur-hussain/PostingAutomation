@@ -8,6 +8,7 @@ export enum SocialPlatform {
   FACEBOOK = 'facebook',
   YOUTUBE = 'youtube',
   X = 'x',
+  THREADS = 'threads',
 }
 
 @Schema({ timestamps: true, collection: 'social_accounts' })

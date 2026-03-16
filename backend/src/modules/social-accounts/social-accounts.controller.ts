@@ -117,6 +117,72 @@ export class SocialAccountsController {
   }
 
   /**
+   * Threads OAuth callback.
+   * Completely decoupled from the meta flow.
+   */
+  @Get('threads/callback')
+  async threadsCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Query('error') error: string,
+    @Query('error_description') errorDescription: string,
+    @Res() res: Response,
+  ) {
+    if (error) {
+      this.logger.warn(`Threads OAuth error: ${error} - ${errorDescription}`);
+      return res.redirect(
+        `postingautomation://social-auth-callback?success=false&message=${encodeURIComponent(errorDescription || 'Authorization was cancelled')}`,
+      );
+    }
+
+    try {
+      const result = await this.socialAccountsService.handleThreadsCallback(
+        code,
+        state,
+      );
+      return res.redirect(
+        `postingautomation://social-auth-callback?success=true&platform=${result.platform}&account=${encodeURIComponent(result.accountName)}`,
+      );
+    } catch (err) {
+      this.logger.error('Threads OAuth callback error', err);
+      return res.redirect(
+        `postingautomation://social-auth-callback?success=false&message=${encodeURIComponent(err.message)}`,
+      );
+    }
+  }
+
+  /**
+   * Threads Uninstall Callback URL.
+   * Called by Meta when a user uninstalls the app or removes permissions.
+   */
+  @Post('threads/deauthorize')
+  @HttpCode(HttpStatus.OK)
+  async threadsDeauthorize(@Body() body: any) {
+    this.logger.log(`Received Threads Deauthorize Webhook: ${JSON.stringify(body)}`);
+    // In a production app, verify the signature using app secret
+    // Parse the signed_request to get user_id and remove their account
+    return { success: true };
+  }
+
+  /**
+   * Threads Delete Callback URL.
+   * Called by Meta when a user requests their data be deleted.
+   */
+  @Post('threads/delete-data')
+  @HttpCode(HttpStatus.OK)
+  async threadsDeleteData(@Body() body: any) {
+    this.logger.log(`Received Threads Delete Data Webhook: ${JSON.stringify(body)}`);
+    // Parse the signed_request to get user_id and remove their data
+    
+    // Meta requires returning a JSON object with a url where the user can check the status 
+    // and a confirmation code.
+    return {
+      url: `${this.configService.get('frontendUrl')}/data-deletion-status`,
+      confirmation_code: `del-${Date.now()}`
+    };
+  }
+
+  /**
    * YouTube OAuth callback.
    * This is called by Google's servers after the user authorizes.
    */

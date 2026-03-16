@@ -10,6 +10,7 @@ import { InstagramService } from '../../integrations/instagram/instagram.service
 import { FacebookService } from '../../integrations/facebook/facebook.service';
 import { YouTubeService } from '../../integrations/youtube/youtube.service';
 import { XService } from '../../integrations/x/x.service';
+import { ThreadsService } from '../../integrations/threads/threads.service';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { XService } from '../../integrations/x/x.service';
     FacebookService,
     YouTubeService,
     XService,
+    ThreadsService,
   ],
   exports: [PostSchedulerService],
 })

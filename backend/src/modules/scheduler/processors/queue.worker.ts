@@ -16,6 +16,7 @@ import { InstagramService } from '../../../integrations/instagram/instagram.serv
 import { FacebookService } from '../../../integrations/facebook/facebook.service';
 import { YouTubeService } from '../../../integrations/youtube/youtube.service';
 import { XService } from '../../../integrations/x/x.service';
+import { ThreadsService } from '../../../integrations/threads/threads.service';
 
 @Processor('posts', { concurrency: 5 })
 export class QueueWorker extends WorkerHost {
@@ -28,6 +29,7 @@ export class QueueWorker extends WorkerHost {
     private facebookService: FacebookService,
     private youtubeService: YouTubeService,
     private xService: XService,
+    private threadsService: ThreadsService,
     private configService: ConfigService,
   ) {
     super();
@@ -129,6 +131,17 @@ export class QueueWorker extends WorkerHost {
               appSecret,
               decryptedToken,
               accountItem.decryptedSecret || '', // Must be returned from getAccountsForPlatforms overlay
+              post.caption,
+              post.mediaUrl,
+            );
+            success = true;
+          } else if (
+            (account.platform as unknown as PostPlatform) ===
+            PostPlatform.THREADS
+          ) {
+            platformId = await this.threadsService.publishThreadsPost(
+              account.accountId,
+              decryptedToken,
               post.caption,
               post.mediaUrl,
             );

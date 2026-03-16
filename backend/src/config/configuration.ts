@@ -45,6 +45,12 @@ export default () => ({
     redirectUri: process.env.FACEBOOK_REDIRECT_URI,
   },
 
+  threads: {
+    appId: process.env.META_THREADS_APP_ID,
+    appSecret: process.env.META_THREADS_APP_SECRET,
+    redirectUri: process.env.META_THREADS_REDIRECT_URI,
+  },
+
   youtube: {
     clientId: process.env.YOUTUBE_CLIENT_ID,
     clientSecret: process.env.YOUTUBE_CLIENT_SECRET,

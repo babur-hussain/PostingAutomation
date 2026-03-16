@@ -8,6 +8,7 @@ import { InstagramProvider } from './providers/instagram.provider';
 import { FacebookProvider } from './providers/facebook.provider';
 import { YouTubeProvider } from './providers/youtube.provider';
 import { XProvider } from './providers/x.provider';
+import { ThreadsProvider } from './providers/threads.provider';
 import {
   SocialAccount,
   SocialAccountSchema,
@@ -30,6 +31,7 @@ import { UsersModule } from '../users/users.module';
     FacebookProvider,
     YouTubeProvider,
     XProvider,
+    ThreadsProvider,
   ],
   exports: [SocialAccountsService],
 })

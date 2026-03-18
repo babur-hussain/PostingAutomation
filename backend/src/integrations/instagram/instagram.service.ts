@@ -189,4 +189,114 @@ export class InstagramService {
   private isVideoUrl(url: string): boolean {
     return /\.(mp4|mov|avi|wmv|webm)(\?.*)?$/i.test(url);
   }
+
+  /**
+   * Fetch insights for an Instagram post (media).
+   */
+  async getPostInsights(
+    igAccountId: string,
+    accessToken: string,
+    platformPostId: string,
+    isNativeToken: boolean = false,
+  ): Promise<any> {
+    try {
+      this.logger.log(`Fetching insights for Instagram post: ${platformPostId}`);
+
+      const apiBase = isNativeToken
+        ? `https://graph.instagram.com/v21.0`
+        : `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+
+      // 1. Get basic stats (likes, comments)
+      const basicResponse = await axios.get(`${apiBase}/${platformPostId}`, {
+        params: {
+          fields: 'like_count,comments_count,media_type',
+          access_token: accessToken,
+        },
+      });
+
+      const likes = basicResponse.data.like_count || 0;
+      const comments = basicResponse.data.comments_count || 0;
+      const mediaType = basicResponse.data.media_type;
+
+      // 2. Get Advanced Insights (reach, impressions). 
+      // Note: Instagram Basic Display API (native token) might not support all insights. 
+      // We will attempt to fetch what we can.
+      let reach = 0;
+      let impressions = 0;
+      let saved = 0;
+
+      try {
+        const metrics = mediaType === 'VIDEO' || mediaType === 'REELS'
+          ? 'impressions,reach,saved,video_views'
+          : 'impressions,reach,saved';
+
+        const insightsResponse = await axios.get(
+          `${apiBase}/${platformPostId}/insights`,
+          {
+            params: {
+              metric: metrics,
+              access_token: accessToken,
+            },
+          },
+        );
+
+        const data = insightsResponse.data.data || [];
+        data.forEach((insight: any) => {
+          if (insight.name === 'reach') reach = insight.values[0]?.value || 0;
+          if (insight.name === 'impressions') impressions = insight.values[0]?.value || 0;
+          if (insight.name === 'saved') saved = insight.values[0]?.value || 0;
+        });
+      } catch (insightErr) {
+        this.logger.warn(`Could not fetch advanced insights for IG post ${platformPostId}: ${insightErr.message}`);
+      }
+
+      return {
+        likes,
+        comments,
+        shares: saved, // Map saves to shares for consistency if needed or keep separate
+        reach,
+        impressions,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch Instagram post insights: ${error?.response?.data?.error?.message || error.message}`,
+      );
+      // Return zeroes if failing
+      return {
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        reach: 0,
+        impressions: 0,
+      };
+    }
+  }
+
+  /**
+   * Delete an Instagram post (media) by its platformPostId.
+   */
+  async deleteMedia(
+    igAccountId: string,
+    accessToken: string,
+    platformPostId: string,
+    isNativeToken: boolean = false,
+  ): Promise<boolean> {
+    try {
+      this.logger.log(`Deleting Instagram post: ${platformPostId}`);
+
+      const apiBase = isNativeToken
+        ? `https://graph.instagram.com/v21.0`
+        : `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+
+      await axios.delete(`${apiBase}/${platformPostId}`, {
+        params: { access_token: accessToken },
+      });
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Failed to delete Instagram post: ${error?.response?.data?.error?.message || error.message}`,
+      );
+      throw error;
+    }
+  }
 }

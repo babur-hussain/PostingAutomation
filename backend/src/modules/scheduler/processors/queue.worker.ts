@@ -166,6 +166,7 @@ export class QueueWorker extends WorkerHost {
 
       const allSuccess = results.every((r) => r.success);
       post.status = allSuccess ? PostStatus.PUBLISHED : PostStatus.FAILED;
+      post.publishResults = results;
       await post.save();
 
       return { results };

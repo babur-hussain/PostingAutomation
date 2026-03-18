@@ -18,7 +18,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 @Controller('api/v1/posts')
 @UseGuards(JwtAuthGuard)
 export class PostsController {
-  constructor(private readonly postsService: PostsService) {}
+  constructor(private readonly postsService: PostsService) { }
 
   @Post()
   create(
@@ -39,6 +39,31 @@ export class PostsController {
   @Get(':id')
   findOne(@CurrentUser('userId') userId: string, @Param('id') id: string) {
     return this.postsService.findOne(userId, id);
+  }
+
+  @Get(':id/analytics')
+  getAnalytics(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+    return this.postsService.getPostAnalytics(userId, id);
+  }
+
+  @Get(':id/analytics/facebook')
+  getFacebookAnalytics(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+    return this.postsService.getFacebookAnalytics(userId, id);
+  }
+
+  @Get(':id/analytics/instagram')
+  getInstagramAnalytics(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+    return this.postsService.getInstagramAnalytics(userId, id);
+  }
+
+  @Delete(':id/facebook')
+  deleteFacebookPost(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+    return this.postsService.deleteFacebookPost(userId, id);
+  }
+
+  @Delete(':id/instagram')
+  deleteInstagramPost(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+    return this.postsService.deleteInstagramPost(userId, id);
   }
 
   @Delete(':id')

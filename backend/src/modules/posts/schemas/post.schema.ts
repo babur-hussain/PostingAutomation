@@ -10,6 +10,26 @@ export enum PostStatus {
   FAILED = 'failed',
 }
 
+export class PublishResult {
+  platform: PostPlatform;
+  success: boolean;
+  platformPostId?: string;
+  error?: string;
+  publishedAt?: Date;
+}
+
+export class AnalyticsData {
+  platform: PostPlatform;
+  likes: number;
+  comments: number;
+  shares: number;
+  reach: number;
+  impressions: number;
+  clicks?: number;
+  engagementRate?: number;
+  lastUpdated: Date;
+}
+
 export enum PostPlatform {
   INSTAGRAM = 'instagram',
   FACEBOOK = 'facebook',
@@ -37,6 +57,12 @@ export class Post {
 
   @Prop({ type: String, enum: PostStatus, default: PostStatus.PENDING })
   status: PostStatus;
+
+  @Prop({ type: Array, default: [] })
+  publishResults: PublishResult[];
+
+  @Prop({ type: Array, default: [] })
+  analytics: AnalyticsData[];
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);

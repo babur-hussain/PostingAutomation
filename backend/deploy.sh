@@ -10,7 +10,7 @@ echo "Deploying backend to AWS EC2 instance ($EC2_IP)..."
 
 # 1. Sync files to EC2 (excluding node_modules, dist, etc.)
 echo "[1/3] Syncing files to server..."
-rsync -avz -e "ssh -o StrictHostKeyChecking=no -i $PEM_FILE" \
+rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no -i $PEM_FILE" \
   --exclude 'node_modules' \
   --exclude 'dist' \
   --exclude '.git' \

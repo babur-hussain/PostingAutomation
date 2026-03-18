@@ -121,7 +121,7 @@ export class QueueWorker extends WorkerHost {
           ) {
             const appKey = this.configService.get<string>('x.consumerKey');
             const appSecret = this.configService.get<string>('x.consumerSecret');
-            
+
             if (!appKey || !appSecret) {
               throw new Error('X API Consumer Key and Secret are not configured.');
             }
@@ -167,6 +167,7 @@ export class QueueWorker extends WorkerHost {
       const allSuccess = results.every((r) => r.success);
       post.status = allSuccess ? PostStatus.PUBLISHED : PostStatus.FAILED;
       post.publishResults = results;
+      post.markModified('publishResults');
       await post.save();
 
       return { results };

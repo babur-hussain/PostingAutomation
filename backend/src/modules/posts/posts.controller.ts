@@ -56,6 +56,11 @@ export class PostsController {
     return this.postsService.getInstagramAnalytics(userId, id);
   }
 
+  @Get(':id/analytics/threads')
+  getThreadsAnalytics(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+    return this.postsService.getThreadsAnalytics(userId, id);
+  }
+
   @Delete(':id/facebook')
   deleteFacebookPost(@CurrentUser('userId') userId: string, @Param('id') id: string) {
     return this.postsService.deleteFacebookPost(userId, id);

@@ -39,6 +39,7 @@ export class XService {
     accessSecret: string,
     text: string,
     mediaUrl?: string | null,
+    location?: { name: string; lat: number; lng: number }
   ): Promise<string> {
     if (!text && !mediaUrl) {
       throw new Error('A tweet requires either text or media.');
@@ -50,7 +51,7 @@ export class XService {
     try {
       if (mediaUrl) {
         this.logger.log(`Downloading media for X upload from: ${mediaUrl}`);
-        
+
         // 1. Download media
         const response = await axios.get(mediaUrl, {
           responseType: 'arraybuffer',
@@ -73,15 +74,33 @@ export class XService {
         tweetOptions.media = { media_ids: [mediaId] };
       }
 
+      if (location) {
+        try {
+          const geoRes = await client.v1.get('geo/search.json', {
+            lat: location.lat,
+            long: location.lng,
+            granularity: 'city',
+            max_results: 1
+          });
+
+          if (geoRes?.result?.places && geoRes.result.places.length > 0) {
+            tweetOptions.geo = { place_id: geoRes.result.places[0].id };
+            this.logger.log(`Mapped location ${location.name} to Twitter Place ID ${tweetOptions.geo.place_id}`);
+          }
+        } catch (err: any) {
+          this.logger.warn(`Failed to resolve Twitter place ID for location ${location.name}: ${err.message}`);
+        }
+      }
+
       const createdTweet = await client.v2.tweet(tweetOptions);
       const tweetId = createdTweet.data.id;
-      
+
       this.logger.log(`Successfully published Tweet with ID: ${tweetId}`);
       return tweetId;
 
     } catch (error: any) {
       this.logger.error(`Failed to publish tweet: ${error.message}`, error.stack);
-      
+
       // Attempt to extract deeper Twitter API v2 errors if present
       if (error.data && error.data.detail) {
         throw new Error(`X API Error: ${error.data.detail}`);

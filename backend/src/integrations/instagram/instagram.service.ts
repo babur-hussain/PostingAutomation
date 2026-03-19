@@ -20,6 +20,7 @@ export class InstagramService {
     accessToken: string,
     mediaUrl: string,
     caption: string,
+    location?: { name: string; lat: number; lng: number }
   ): Promise<string> {
     if (!mediaUrl) {
       throw new Error('Media URL is required for Instagram posting');
@@ -43,6 +44,27 @@ export class InstagramService {
     let lastError: any = null;
 
     try {
+      let locationId: string | undefined;
+      // Get location ID using graph api search similar to Facebook
+      if (location) {
+        try {
+          const searchRes = await axios.get(`https://graph.facebook.com/${GRAPH_API_VERSION}/search`, {
+            params: {
+              type: 'place',
+              center: `${location.lat},${location.lng}`,
+              distance: 1000,
+              access_token: accessToken,
+            }
+          });
+          if (searchRes.data?.data && searchRes.data.data.length > 0) {
+            locationId = searchRes.data.data[0].id;
+            this.logger.log(`Mapped location ${location.name} to Instagram Location ID ${locationId}`);
+          }
+        } catch (err) {
+          this.logger.warn(`Failed to resolve Instagram location_id for ${location.name}`);
+        }
+      }
+
       // 1. Create container
       const containerId = await this.createContainer(
         apiBase,
@@ -51,6 +73,7 @@ export class InstagramService {
         mediaUrl,
         caption,
         isNativeToken,
+        locationId,
       );
       this.logger.log(`Created container: ${containerId}`);
 
@@ -91,6 +114,7 @@ export class InstagramService {
     mediaUrl: string,
     caption: string,
     isNativeToken: boolean,
+    locationId?: string,
   ): Promise<string> {
     const isVideo = this.isVideoUrl(mediaUrl);
     const targetAccountId = isNativeToken ? 'me' : igAccountId;
@@ -100,6 +124,9 @@ export class InstagramService {
     params.append('access_token', accessToken);
     if (caption) {
       params.append('caption', caption);
+    }
+    if (locationId) {
+      params.append('location_id', locationId);
     }
     if (isVideo) {
       params.append('media_type', 'REELS');

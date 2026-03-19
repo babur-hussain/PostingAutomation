@@ -14,6 +14,7 @@ import { SocialAccountsModule } from './modules/social-accounts/social-accounts.
 import { PostsModule } from './modules/posts/posts.module';
 import { MediaModule } from './modules/media/media.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
+import { LocationsModule } from './modules/locations/locations.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { SchedulerModule } from './modules/scheduler/scheduler.module';
     PostsModule,
     MediaModule,
     SchedulerModule,
+    LocationsModule,
   ],
 })
-export class AppModule {}
+export class AppModule { }

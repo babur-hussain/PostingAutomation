@@ -9,6 +9,7 @@ import { UsersModule } from '../users/users.module';
 import { SocialAccountsModule } from '../social-accounts/social-accounts.module';
 import { FacebookService } from '../../integrations/facebook/facebook.service';
 import { InstagramService } from '../../integrations/instagram/instagram.service';
+import { ThreadsService } from '../../integrations/threads/threads.service';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { InstagramService } from '../../integrations/instagram/instagram.service
     SocialAccountsModule,
   ],
   controllers: [PostsController],
-  providers: [PostsService, FacebookService, InstagramService],
+  providers: [PostsService, FacebookService, InstagramService, ThreadsService],
   exports: [PostsService],
 })
-export class PostsModule {}
+export class PostsModule { }

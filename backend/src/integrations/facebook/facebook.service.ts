@@ -14,12 +14,33 @@ export class FacebookService {
     pageAccessToken: string,
     caption: string,
     mediaUrl: string | null = null,
+    location?: { name: string; lat: number; lng: number }
   ): Promise<string> {
     try {
       this.logger.log(`Starting publish process for Facebook Page: ${pageId}`);
 
+      let placeId: string | undefined;
+      if (location) {
+        try {
+          const searchRes = await axios.get(`${this.apiBase}/search`, {
+            params: {
+              type: 'place',
+              center: `${location.lat},${location.lng}`,
+              distance: 1000,
+              access_token: pageAccessToken,
+            }
+          });
+          if (searchRes.data?.data && searchRes.data.data.length > 0) {
+            placeId = searchRes.data.data[0].id;
+            this.logger.log(`Mapped location ${location.name} to Facebook Place ID ${placeId}`);
+          }
+        } catch (err) {
+          this.logger.warn(`Failed to resolve Facebook place ID for location ${location.name}`);
+        }
+      }
+
       if (!mediaUrl) {
-        return await this.publishTextPost(pageId, pageAccessToken, caption);
+        return await this.publishTextPost(pageId, pageAccessToken, caption, placeId);
       }
 
       if (this.isVideoUrl(mediaUrl)) {
@@ -28,6 +49,7 @@ export class FacebookService {
           pageAccessToken,
           mediaUrl,
           caption,
+          placeId,
         );
       }
 
@@ -36,6 +58,7 @@ export class FacebookService {
         pageAccessToken,
         mediaUrl,
         caption,
+        placeId,
       );
     } catch (error) {
       this.logger.error(
@@ -49,11 +72,13 @@ export class FacebookService {
     pageId: string,
     accessToken: string,
     message: string,
+    placeId?: string,
   ): Promise<string> {
     const response = await axios.post(`${this.apiBase}/${pageId}/feed`, null, {
       params: {
         message,
         access_token: accessToken,
+        ...(placeId && { place: placeId }),
       },
     });
 
@@ -65,6 +90,7 @@ export class FacebookService {
     accessToken: string,
     imageUrl: string,
     caption: string,
+    placeId?: string,
   ): Promise<string> {
     const response = await axios.post(
       `${this.apiBase}/${pageId}/photos`,
@@ -74,6 +100,7 @@ export class FacebookService {
           url: imageUrl,
           caption,
           access_token: accessToken,
+          ...(placeId && { place: placeId }),
         },
       },
     );
@@ -86,6 +113,7 @@ export class FacebookService {
     accessToken: string,
     videoUrl: string,
     description: string,
+    placeId?: string,
   ): Promise<string> {
     const response = await axios.post(
       `${this.apiBase}/${pageId}/videos`,
@@ -95,6 +123,7 @@ export class FacebookService {
           file_url: videoUrl,
           description,
           access_token: accessToken,
+          ...(placeId && { place: placeId }),
         },
       },
     );
@@ -131,7 +160,7 @@ export class FacebookService {
       const shares = data.shares?.count || 0;
       const likes = data.likes?.summary?.total_count || 0;
       const comments = data.comments?.summary?.total_count || 0;
-      
+
       let reach = 0;
       let impressions = 0;
 

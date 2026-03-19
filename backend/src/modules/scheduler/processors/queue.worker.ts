@@ -86,6 +86,7 @@ export class QueueWorker extends WorkerHost {
               decryptedToken,
               post.mediaUrl,
               post.caption,
+              post.location,
             );
             success = true;
           } else if (
@@ -97,6 +98,7 @@ export class QueueWorker extends WorkerHost {
               decryptedToken,
               post.caption,
               post.mediaUrl,
+              post.location,
             );
             success = true;
           } else if (
@@ -110,6 +112,7 @@ export class QueueWorker extends WorkerHost {
                 post.mediaUrl,
                 post.caption, // Using caption as title
                 post.caption, // Using caption as description
+                post.location,
               );
               success = true;
             } else {
@@ -133,6 +136,7 @@ export class QueueWorker extends WorkerHost {
               accountItem.decryptedSecret || '', // Must be returned from getAccountsForPlatforms overlay
               post.caption,
               post.mediaUrl,
+              post.location,
             );
             success = true;
           } else if (

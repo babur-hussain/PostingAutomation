@@ -20,6 +20,7 @@ export class YouTubeService {
     videoUrl: string,
     title: string,
     description: string,
+    location?: { name: string; lat: number; lng: number }
   ): Promise<string> {
     if (!videoUrl) {
       throw new Error('Video URL is required for YouTube posting');
@@ -37,8 +38,7 @@ export class YouTubeService {
 
       this.logger.log(`Downloaded video: ${contentLength} bytes`);
 
-      // 2. Initiate resumable upload
-      const metadata = {
+      const metadata: any = {
         snippet: {
           title: title || 'Untitled',
           description: description || '',
@@ -50,13 +50,25 @@ export class YouTubeService {
         },
       };
 
+      if (location) {
+        metadata.recordingDetails = {
+          location: {
+            latitude: location.lat,
+            longitude: location.lng,
+          },
+          locationDescription: location.name,
+        };
+      }
+
+      const part = location ? 'snippet,status,recordingDetails' : 'snippet,status';
+
       const initiateResponse = await axios.post(
         'https://www.googleapis.com/upload/youtube/v3/videos',
         JSON.stringify(metadata),
         {
           params: {
             uploadType: 'resumable',
-            part: 'snippet,status',
+            part,
           },
           headers: {
             Authorization: `Bearer ${accessToken}`,

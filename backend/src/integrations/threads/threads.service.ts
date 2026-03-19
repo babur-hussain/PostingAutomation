@@ -139,4 +139,55 @@ export class ThreadsService {
   private isVideoUrl(url: string): boolean {
     return /\.(mp4|mov|avi|wmv|webm)(\?.*)?$/i.test(url);
   }
+
+  /**
+   * Fetch insights for a Threads post (media).
+   */
+  async getPostInsights(
+    accountId: string,
+    accessToken: string,
+    platformPostId: string,
+  ): Promise<any> {
+    try {
+      this.logger.log(`Fetching insights for Threads post: ${platformPostId}`);
+
+      const metrics = 'views,likes,replies,reposts,quotes';
+      const response = await axios.get(`${this.apiBase}/${platformPostId}/insights`, {
+        params: {
+          metric: metrics,
+          access_token: accessToken,
+        },
+      });
+
+      const data = response.data.data || [];
+      let views = 0, likes = 0, replies = 0, reposts = 0, quotes = 0;
+
+      data.forEach((insight: any) => {
+        if (insight.name === 'views') views = insight.values[0]?.value || 0;
+        if (insight.name === 'likes') likes = insight.values[0]?.value || 0;
+        if (insight.name === 'replies') replies = insight.values[0]?.value || 0;
+        if (insight.name === 'reposts') reposts = insight.values[0]?.value || 0;
+        if (insight.name === 'quotes') quotes = insight.values[0]?.value || 0;
+      });
+
+      return {
+        likes,
+        comments: replies,
+        shares: reposts + quotes,
+        reach: views,
+        impressions: views,
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to fetch Threads post insights: ${error?.response?.data?.error?.message || error.message}`,
+      );
+      return {
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        reach: 0,
+        impressions: 0,
+      };
+    }
+  }
 }

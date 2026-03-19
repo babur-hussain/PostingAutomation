@@ -13,6 +13,7 @@ import { SocialAccountsService } from '../social-accounts/social-accounts.servic
 import { SocialPlatform } from '../social-accounts/schemas/social-account.schema';
 import { FacebookService } from '../../integrations/facebook/facebook.service';
 import { InstagramService } from '../../integrations/instagram/instagram.service';
+import { ThreadsService } from '../../integrations/threads/threads.service';
 
 @Injectable()
 export class PostsService {
@@ -24,6 +25,7 @@ export class PostsService {
     private socialAccountsService: SocialAccountsService,
     private facebookService: FacebookService,
     private instagramService: InstagramService,
+    private threadsService: ThreadsService,
   ) { }
 
   async create(userId: string, dto: CreatePostDto): Promise<PostDocument> {
@@ -46,6 +48,7 @@ export class PostsService {
       mediaUrl: dto.mediaUrl || null,
       platforms: dto.platforms,
       scheduledTime: dto.scheduledTime ? new Date(dto.scheduledTime) : null,
+      location: dto.location || null,
       status: initialStatus,
     });
 
@@ -181,6 +184,12 @@ export class PostsService {
             result.platformPostId,
             accountItem.decryptedToken.startsWith('IG'),
           );
+        } else if (result.platform === PostPlatform.THREADS) {
+          stats = await this.threadsService.getPostInsights(
+            accountItem.account.accountId,
+            accountItem.decryptedToken,
+            result.platformPostId,
+          );
         }
 
         if (stats) {
@@ -307,6 +316,57 @@ export class PostsService {
       post.analytics.push(igAnalytics);
       await post.save();
       return igAnalytics;
+    }
+
+    return null;
+  }
+
+  async getThreadsAnalytics(userId: string, postId: string) {
+    const post = await this.findOne(userId, postId);
+
+    if (post.status !== PostStatus.PUBLISHED) {
+      throw new BadRequestException('Can only fetch analytics for published posts');
+    }
+
+    const threadsResult = post.publishResults?.find((r) => r.platform === PostPlatform.THREADS && r.success && r.platformPostId);
+    if (!threadsResult) {
+      throw new BadRequestException('Threads post not found or not published successfully');
+    }
+
+    const accountsWithTokens = await this.socialAccountsService.getAccountsForPlatforms(
+      userId,
+      [PostPlatform.THREADS as unknown as SocialPlatform],
+    );
+
+    const accountItem = accountsWithTokens.find(
+      (a) => (a.account.platform as unknown as string) === (PostPlatform.THREADS as unknown as string),
+    );
+
+    if (!accountItem) {
+      throw new BadRequestException('Linked Threads account not found');
+    }
+
+    const stats = await this.threadsService.getPostInsights(
+      accountItem.account.accountId,
+      accountItem.decryptedToken,
+      threadsResult.platformPostId as string,
+    );
+
+    if (stats) {
+      const threadsAnalytics = {
+        platform: PostPlatform.THREADS,
+        likes: stats.likes || 0,
+        comments: stats.comments || 0,
+        shares: stats.shares || 0,
+        reach: stats.reach || 0,
+        impressions: stats.impressions || 0,
+        lastUpdated: new Date(),
+      };
+
+      post.analytics = (post.analytics || []).filter((a) => a.platform !== PostPlatform.THREADS);
+      post.analytics.push(threadsAnalytics);
+      await post.save();
+      return threadsAnalytics;
     }
 
     return null;

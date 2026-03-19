@@ -30,6 +30,12 @@ export class AnalyticsData {
   lastUpdated: Date;
 }
 
+export class LocationInfo {
+  name: string;
+  lat: number;
+  lng: number;
+}
+
 export enum PostPlatform {
   INSTAGRAM = 'instagram',
   FACEBOOK = 'facebook',
@@ -63,6 +69,9 @@ export class Post {
 
   @Prop({ type: Array, default: [] })
   analytics: AnalyticsData[];
+
+  @Prop({ type: Object, default: null })
+  location?: LocationInfo;
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);

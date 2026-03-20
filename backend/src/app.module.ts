@@ -15,6 +15,7 @@ import { PostsModule } from './modules/posts/posts.module';
 import { MediaModule } from './modules/media/media.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { LocationsModule } from './modules/locations/locations.module';
+import { ThreadsModule } from './integrations/threads/threads.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { LocationsModule } from './modules/locations/locations.module';
     MediaModule,
     SchedulerModule,
     LocationsModule,
+    ThreadsModule,
   ],
 })
 export class AppModule { }

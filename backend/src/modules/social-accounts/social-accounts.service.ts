@@ -158,7 +158,7 @@ export class SocialAccountsService {
     code: string,
     state: string,
   ): Promise<{ platform: SocialPlatform; accountName: string }> {
-    const stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
+    const stateData = this.verifyState(state);
     const { userId, platform } = stateData;
 
     if (platform !== SocialPlatform.THREADS) {

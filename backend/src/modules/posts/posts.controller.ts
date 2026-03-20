@@ -72,6 +72,11 @@ export class PostsController {
     return this.postsService.deleteInstagramPost(userId, id);
   }
 
+  @Delete(':id/threads')
+  deleteThreadsPost(@CurrentUser('userId') userId: string, @Param('id', ParseObjectIdPipe) id: string) {
+    return this.postsService.deleteThreadsPost(userId, id);
+  }
+
   @Delete(':id')
   remove(@CurrentUser('userId') userId: string, @Param('id', ParseObjectIdPipe) id: string) {
     return this.postsService.remove(userId, id);

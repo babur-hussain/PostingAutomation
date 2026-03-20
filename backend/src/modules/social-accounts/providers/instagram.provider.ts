@@ -27,9 +27,8 @@ export class InstagramProvider {
   static readonly SCOPES = [
     'instagram_business_basic',
     'instagram_business_content_publish',
-    'instagram_manage_comments',
-    'instagram_manage_insights',
-    'instagram_manage_contents',
+    'instagram_business_manage_comments',
+    'instagram_business_manage_insights',
   ];
 
   private readonly appId: string;

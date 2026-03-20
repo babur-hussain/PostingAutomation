@@ -13,6 +13,14 @@ export class ThreadsProvider {
   static readonly SCOPES = [
     'threads_basic',
     'threads_content_publish',
+    'threads_read_replies',
+    'threads_manage_replies',
+    'threads_manage_insights',
+    'threads_manage_mentions',
+    'threads_profile_discovery',
+    'threads_keyword_search',
+    'threads_location_tagging',
+    'threads_delete',
   ];
 
   private readonly appId: string;

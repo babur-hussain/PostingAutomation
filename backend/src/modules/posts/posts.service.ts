@@ -294,6 +294,11 @@ export class PostsService {
       if (!deleted) {
         this.logger.warn(`Instagram API deletion not supported; marking locally deleted only.`);
       }
+    } else if (platform === PostPlatform.THREADS) {
+      await this.threadsService.deleteThread(
+        platformResult.platformPostId as string,
+        accountItem.decryptedToken,
+      );
     }
 
     // Mark the platform as deleted in the DB regardless of API support
@@ -317,6 +322,9 @@ export class PostsService {
   }
   async deleteInstagramPost(userId: string, postId: string) {
     return this.deletePlatformPost(userId, postId, PostPlatform.INSTAGRAM);
+  }
+  async deleteThreadsPost(userId: string, postId: string) {
+    return this.deletePlatformPost(userId, postId, PostPlatform.THREADS);
   }
 
   // --- Private helpers ---

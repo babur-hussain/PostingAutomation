@@ -22,11 +22,11 @@ export class ThreadsService {
       let creationId: string;
 
       if (!mediaUrl) {
-        creationId = await this.createTextContainer(threadsAccountId, accessToken, caption);
+        creationId = await this.createTextContainer(threadsAccountId, accessToken, caption, location);
       } else if (this.isVideoUrl(mediaUrl)) {
-        creationId = await this.createVideoContainer(threadsAccountId, accessToken, mediaUrl, caption);
+        creationId = await this.createVideoContainer(threadsAccountId, accessToken, mediaUrl, caption, location);
       } else {
-        creationId = await this.createImageContainer(threadsAccountId, accessToken, mediaUrl, caption);
+        creationId = await this.createImageContainer(threadsAccountId, accessToken, mediaUrl, caption, location);
       }
 
       // Wait a short moment for the container to process if there's media
@@ -47,14 +47,20 @@ export class ThreadsService {
     accountId: string,
     accessToken: string,
     text: string,
+    location?: { name: string; lat: number; lng: number } | null,
   ): Promise<string> {
-    const response = await axios.post(`${this.apiBase}/${accountId}/threads`, null, {
-      params: {
-        media_type: 'TEXT',
-        text,
-        access_token: accessToken,
-      },
-    });
+    const params: any = {
+      media_type: 'TEXT',
+      text,
+      access_token: accessToken,
+    };
+    // Threads API location tagging typically requires a location_id from Meta's Pages/Places API.
+    // If we have a place id mapped to location.name, we would pass it here.
+    if (location && (location as any).locationId) {
+       params.location_id = (location as any).locationId;
+    }
+
+    const response = await axios.post(`${this.apiBase}/${accountId}/threads`, null, { params });
     return response.data.id;
   }
 
@@ -63,15 +69,19 @@ export class ThreadsService {
     accessToken: string,
     imageUrl: string,
     text: string,
+    location?: { name: string; lat: number; lng: number } | null,
   ): Promise<string> {
-    const response = await axios.post(`${this.apiBase}/${accountId}/threads`, null, {
-      params: {
-        media_type: 'IMAGE',
-        image_url: imageUrl,
-        text,
-        access_token: accessToken,
-      },
-    });
+    const params: any = {
+      media_type: 'IMAGE',
+      image_url: imageUrl,
+      text,
+      access_token: accessToken,
+    };
+    if (location && (location as any).locationId) {
+       params.location_id = (location as any).locationId;
+    }
+
+    const response = await axios.post(`${this.apiBase}/${accountId}/threads`, null, { params });
     return response.data.id;
   }
 
@@ -80,15 +90,19 @@ export class ThreadsService {
     accessToken: string,
     videoUrl: string,
     text: string,
+    location?: { name: string; lat: number; lng: number } | null,
   ): Promise<string> {
-    const response = await axios.post(`${this.apiBase}/${accountId}/threads`, null, {
-      params: {
-        media_type: 'VIDEO',
-        video_url: videoUrl,
-        text,
-        access_token: accessToken,
-      },
-    });
+    const params: any = {
+      media_type: 'VIDEO',
+      video_url: videoUrl,
+      text,
+      access_token: accessToken,
+    };
+    if (location && (location as any).locationId) {
+       params.location_id = (location as any).locationId;
+    }
+
+    const response = await axios.post(`${this.apiBase}/${accountId}/threads`, null, { params });
     return response.data.id;
   }
 
@@ -189,6 +203,143 @@ export class ThreadsService {
         reach: 0,
         impressions: 0,
       };
+    }
+  }
+
+  /**
+   * Fetch replies for a specific thread (threads_read_replies).
+   */
+  async getReplies(platformPostId: string, accessToken: string): Promise<any[]> {
+    try {
+      this.logger.log(`Fetching replies for thread: ${platformPostId}`);
+      const response = await axios.get(`${this.apiBase}/${platformPostId}/replies`, {
+        params: { access_token: accessToken },
+      });
+      return response.data.data;
+    } catch (error: any) {
+      this.logger.error(`Failed to get replies: ${error?.response?.data?.error?.message || error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Reply to an existing thread (threads_manage_replies).
+   */
+  async replyToThread(
+    threadsAccountId: string,
+    accessToken: string,
+    platformPostId: string,
+    text: string
+  ): Promise<string> {
+    try {
+      this.logger.log(`Replying to thread: ${platformPostId}`);
+      // Create container with reply_to_id
+      const createResponse = await axios.post(`${this.apiBase}/${threadsAccountId}/threads`, null, {
+        params: {
+          media_type: 'TEXT',
+          text,
+          reply_to_id: platformPostId,
+          access_token: accessToken,
+        },
+      });
+      const creationId = createResponse.data.id;
+      // Publish the container
+      return await this.publishContainer(threadsAccountId, accessToken, creationId);
+    } catch (error: any) {
+      this.logger.error(`Failed to reply to thread: ${error?.response?.data?.error?.message || error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Hide or unhide a reply (threads_manage_replies).
+   */
+  async hideReply(replyId: string, accessToken: string, hide: boolean = true): Promise<boolean> {
+    try {
+      this.logger.log(`${hide ? 'Hiding' : 'Unhiding'} reply: ${replyId}`);
+      const response = await axios.post(`${this.apiBase}/${replyId}/manage_reply`, null, {
+        params: {
+          hide,
+          access_token: accessToken,
+        },
+      });
+      return response.data.success;
+    } catch (error: any) {
+      this.logger.error(`Failed to manage reply: ${error?.response?.data?.error?.message || error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Profile discovery / search for a user (threads_profile_discovery).
+   */
+  async getUserProfileDiscovery(accountId: string, accessToken: string, targetUsername: string): Promise<any> {
+    try {
+      this.logger.log(`Discovering profile for username: ${targetUsername}`);
+      // Based on Threads API, Profile Discovery often looks like searching or accessing standard profile fields.
+      const response = await axios.get(`${this.apiBase}/users`, {
+        params: {
+          username: targetUsername,
+          access_token: accessToken,
+          fields: 'id,username,name,threads_profile_picture_url,threads_biography',
+        },
+      });
+      return response.data;
+    } catch (error: any) {
+      this.logger.error(`Profile discovery failed: ${error?.response?.data?.error?.message || error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Read mentions (threads_manage_mentions).
+   */
+  async getMentions(accountId: string, accessToken: string): Promise<any[]> {
+    try {
+      this.logger.log(`Fetching mentions for account: ${accountId}`);
+      const response = await axios.get(`${this.apiBase}/${accountId}/mentions`, {
+        params: { access_token: accessToken },
+      });
+      return response.data.data;
+    } catch (error: any) {
+      this.logger.error(`Failed to fetch mentions: ${error?.response?.data?.error?.message || error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Search threads by keyword (threads_keyword_search).
+   */
+  async searchThreads(accountId: string, accessToken: string, query: string): Promise<any[]> {
+    try {
+      this.logger.log(`Searching threads for query: ${query}`);
+      const response = await axios.get(`${this.apiBase}/threads/search`, {
+        params: {
+          q: query,
+          access_token: accessToken,
+        },
+      });
+      return response.data.data;
+    } catch (error: any) {
+      this.logger.error(`Failed to search threads: ${error?.response?.data?.error?.message || error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a thread (threads_delete).
+   */
+  async deleteThread(platformPostId: string, accessToken: string): Promise<boolean> {
+    try {
+      this.logger.log(`Deleting thread: ${platformPostId}`);
+      // Using DELETE method on the thread ID
+      const response = await axios.delete(`${this.apiBase}/${platformPostId}`, {
+        params: { access_token: accessToken },
+      });
+      return response.data.success || true;
+    } catch (error: any) {
+      this.logger.error(`Failed to delete thread: ${error?.response?.data?.error?.message || error.message}`);
+      throw error;
     }
   }
 }

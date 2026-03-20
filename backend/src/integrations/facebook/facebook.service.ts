@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
+import { withRetry } from '../../common/utils/retry.util';
 
 @Injectable()
 export class FacebookService {
   private readonly logger = new Logger(FacebookService.name);
-  private readonly apiBase = 'https://graph.facebook.com/v21.0';
+  private readonly apiBase = 'https://graph.facebook.com/v22.0';
 
   /**
    * Main function to publish a Facebook post.
@@ -16,56 +17,58 @@ export class FacebookService {
     mediaUrl: string | null = null,
     location?: { name: string; lat: number; lng: number }
   ): Promise<string> {
-    try {
-      this.logger.log(`Starting publish process for Facebook Page: ${pageId}`);
+    return withRetry(async () => {
+      try {
+        this.logger.log(`Starting publish process for Facebook Page: ${pageId}`);
 
-      let placeId: string | undefined;
-      if (location) {
-        try {
-          const searchRes = await axios.get(`${this.apiBase}/search`, {
-            params: {
-              type: 'place',
-              center: `${location.lat},${location.lng}`,
-              distance: 1000,
-              access_token: pageAccessToken,
+        let placeId: string | undefined;
+        if (location) {
+          try {
+            const searchRes = await axios.get(`${this.apiBase}/search`, {
+              params: {
+                type: 'place',
+                center: `${location.lat},${location.lng}`,
+                distance: 1000,
+                access_token: pageAccessToken,
+              }
+            });
+            if (searchRes.data?.data && searchRes.data.data.length > 0) {
+              placeId = searchRes.data.data[0].id;
+              this.logger.log(`Mapped location ${location.name} to Facebook Place ID ${placeId}`);
             }
-          });
-          if (searchRes.data?.data && searchRes.data.data.length > 0) {
-            placeId = searchRes.data.data[0].id;
-            this.logger.log(`Mapped location ${location.name} to Facebook Place ID ${placeId}`);
+          } catch (err) {
+            this.logger.warn(`Failed to resolve Facebook place ID for location ${location.name}`);
           }
-        } catch (err) {
-          this.logger.warn(`Failed to resolve Facebook place ID for location ${location.name}`);
         }
-      }
 
-      if (!mediaUrl) {
-        return await this.publishTextPost(pageId, pageAccessToken, caption, placeId);
-      }
+        if (!mediaUrl) {
+          return await this.publishTextPost(pageId, pageAccessToken, caption, placeId);
+        }
 
-      if (this.isVideoUrl(mediaUrl)) {
-        return await this.publishVideo(
+        if (this.isVideoUrl(mediaUrl)) {
+          return await this.publishVideo(
+            pageId,
+            pageAccessToken,
+            mediaUrl,
+            caption,
+            placeId,
+          );
+        }
+
+        return await this.publishPhoto(
           pageId,
           pageAccessToken,
           mediaUrl,
           caption,
           placeId,
         );
+      } catch (error) {
+        this.logger.error(
+          `Failed to publish Facebook post: ${error?.response?.data?.error?.message || error.message}`,
+        );
+        throw error;
       }
-
-      return await this.publishPhoto(
-        pageId,
-        pageAccessToken,
-        mediaUrl,
-        caption,
-        placeId,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to publish Facebook post: ${error?.response?.data?.error?.message || error.message}`,
-      );
-      throw error;
-    }
+    });
   }
 
   private async publishTextPost(
@@ -143,18 +146,18 @@ export class FacebookService {
     accessToken: string,
     platformPostId: string,
   ): Promise<any> {
-    try {
-      this.logger.log(`Fetching insights for Facebook post: ${platformPostId}`);
-      // Fetch post reactions, comments, shares, and insights
-      const response = await axios.get(
-        `${this.apiBase}/${platformPostId}`,
-        {
-          params: {
-            fields: 'shares,likes.summary(true),comments.summary(true),insights.metric(post_impressions,post_impressions_unique)',
-            access_token: accessToken,
+    return withRetry(async () => {
+      try {
+        this.logger.log(`Fetching insights for Facebook post: ${platformPostId}`);
+        const response = await axios.get(
+          `${this.apiBase}/${platformPostId}`,
+          {
+            params: {
+              fields: 'shares,likes.summary(true),comments.summary(true),insights.metric(post_impressions,post_impressions_unique)',
+              access_token: accessToken,
+            },
           },
-        },
-      );
+        );
 
       const data = response.data;
       const shares = data.shares?.count || 0;
@@ -195,6 +198,7 @@ export class FacebookService {
         impressions: 0,
       };
     }
+    });
   }
 
   /**

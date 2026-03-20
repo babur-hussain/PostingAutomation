@@ -14,6 +14,7 @@ export class ThreadsService {
     accessToken: string,
     caption: string,
     mediaUrl: string | null = null,
+    location?: { name: string; lat: number; lng: number } | null,
   ): Promise<string> {
     try {
       this.logger.log(`Starting publish process for Threads account: ${threadsAccountId}`);

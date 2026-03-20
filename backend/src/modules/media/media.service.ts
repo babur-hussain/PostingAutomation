@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
@@ -13,6 +13,16 @@ import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Media, MediaDocument } from './schemas/media.schema';
+
+// Allowed MIME types for media uploads
+const ALLOWED_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'video/mp4',
+  'video/quicktime', // .mov
+]);
 
 @Injectable()
 export class MediaService {
@@ -58,11 +68,20 @@ export class MediaService {
 
   /**
    * Upload a file. Tries S3 first, falls back to local disk storage.
+   * Validates file MIME type against the allowlist before uploading.
    */
   async upload(
     userId: string,
     file: Express.Multer.File,
   ): Promise<MediaDocument> {
+    // #10: Validate file type against allowlist
+    if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      throw new BadRequestException(
+        `File type "${file.mimetype}" is not allowed. ` +
+        `Accepted types: JPEG, PNG, GIF, WebP, MP4, MOV.`,
+      );
+    }
+
     const ext = file.originalname.split('.').pop();
     const uniqueName = `${uuidv4()}.${ext}`;
 

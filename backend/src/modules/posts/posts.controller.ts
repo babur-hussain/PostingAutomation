@@ -14,6 +14,7 @@ import { CreatePostDto } from './dto/create-post.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ParseObjectIdPipe } from '../../common/pipes/parse-object-id.pipe';
 
 @Controller('api/v1/posts')
 @UseGuards(JwtAuthGuard)
@@ -33,46 +34,46 @@ export class PostsController {
     @CurrentUser('userId') userId: string,
     @Query() pagination: PaginationDto,
   ) {
-    return this.postsService.findAll(userId, pagination.page);
+    return this.postsService.findAll(userId, pagination.page, pagination.limit);
   }
 
   @Get(':id')
-  findOne(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+  findOne(@CurrentUser('userId') userId: string, @Param('id', ParseObjectIdPipe) id: string) {
     return this.postsService.findOne(userId, id);
   }
 
   @Get(':id/analytics')
-  getAnalytics(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+  getAnalytics(@CurrentUser('userId') userId: string, @Param('id', ParseObjectIdPipe) id: string) {
     return this.postsService.getPostAnalytics(userId, id);
   }
 
   @Get(':id/analytics/facebook')
-  getFacebookAnalytics(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+  getFacebookAnalytics(@CurrentUser('userId') userId: string, @Param('id', ParseObjectIdPipe) id: string) {
     return this.postsService.getFacebookAnalytics(userId, id);
   }
 
   @Get(':id/analytics/instagram')
-  getInstagramAnalytics(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+  getInstagramAnalytics(@CurrentUser('userId') userId: string, @Param('id', ParseObjectIdPipe) id: string) {
     return this.postsService.getInstagramAnalytics(userId, id);
   }
 
   @Get(':id/analytics/threads')
-  getThreadsAnalytics(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+  getThreadsAnalytics(@CurrentUser('userId') userId: string, @Param('id', ParseObjectIdPipe) id: string) {
     return this.postsService.getThreadsAnalytics(userId, id);
   }
 
   @Delete(':id/facebook')
-  deleteFacebookPost(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+  deleteFacebookPost(@CurrentUser('userId') userId: string, @Param('id', ParseObjectIdPipe) id: string) {
     return this.postsService.deleteFacebookPost(userId, id);
   }
 
   @Delete(':id/instagram')
-  deleteInstagramPost(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+  deleteInstagramPost(@CurrentUser('userId') userId: string, @Param('id', ParseObjectIdPipe) id: string) {
     return this.postsService.deleteInstagramPost(userId, id);
   }
 
   @Delete(':id')
-  remove(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+  remove(@CurrentUser('userId') userId: string, @Param('id', ParseObjectIdPipe) id: string) {
     return this.postsService.remove(userId, id);
   }
 }

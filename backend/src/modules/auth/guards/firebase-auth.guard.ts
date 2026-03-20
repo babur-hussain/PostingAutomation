@@ -3,6 +3,7 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { FirebaseService } from '../firebase.service';
@@ -10,6 +11,8 @@ import { UsersService } from '../../users/users.service';
 
 @Injectable()
 export class FirebaseAuthGuard implements CanActivate {
+  private readonly logger = new Logger(FirebaseAuthGuard.name);
+
   constructor(
     protected reflector: Reflector,
     private firebaseService: FirebaseService,
@@ -66,7 +69,7 @@ export class FirebaseAuthGuard implements CanActivate {
 
       return true;
     } catch (error) {
-      console.error('Firebase token verification error', error);
+      this.logger.error('Firebase token verification failed', error instanceof Error ? error.message : 'Unknown error');
       throw new UnauthorizedException('Invalid Firebase Token');
     }
   }

@@ -14,23 +14,28 @@ async function bootstrap() {
   });
 
   // Increase body parser limits for media uploads
+  // NestJS built-in body parser handles this via the rawBody option and express settings
   const expressApp = app.getHttpAdapter().getInstance();
-  const bodyParser = require('body-parser');
-  expressApp.use(bodyParser.json({ limit: '100mb' }));
-  expressApp.use(bodyParser.urlencoded({ limit: '100mb', extended: true }));
+  const express = require('express');
+  expressApp.use(express.json({ limit: '100mb' }));
+  expressApp.use(express.urlencoded({ limit: '100mb', extended: true }));
 
   const configService = app.get(ConfigService);
 
   // Security
   app.use(helmet());
 
-  // CORS
+  // CORS — only allow localhost in non-production
+  const allowedOrigins: string[] = [
+    configService.get<string>('frontendUrl'),
+  ].filter(Boolean) as string[];
+
+  if (configService.get<string>('nodeEnv') !== 'production') {
+    allowedOrigins.push('http://localhost:8081', 'http://localhost:19006');
+  }
+
   app.enableCors({
-    origin: [
-      configService.get<string>('frontendUrl'),
-      'http://localhost:8081',
-      'http://localhost:19006',
-    ],
+    origin: allowedOrigins,
     credentials: true,
   });
 

@@ -29,7 +29,7 @@ export class PostsService {
   ) { }
 
   async create(userId: string, dto: CreatePostDto): Promise<PostDocument> {
-    if (!dto.caption && !dto.mediaUrl) {
+    if (!dto.caption && (!dto.mediaUrls || dto.mediaUrls.length === 0)) {
       throw new BadRequestException(
         'A post must have either a caption or media attached',
       );
@@ -45,7 +45,7 @@ export class PostsService {
     const post = new this.postModel({
       userId: new Types.ObjectId(userId),
       caption: dto.caption || '',
-      mediaUrl: dto.mediaUrl || null,
+      mediaUrl: dto.mediaUrls && dto.mediaUrls.length > 0 ? dto.mediaUrls[0] : null,
       platforms: dto.platforms,
       scheduledTime: dto.scheduledTime ? new Date(dto.scheduledTime) : null,
       location: dto.location || null,
@@ -114,9 +114,14 @@ export class PostsService {
   async updateStatus(
     postId: string,
     status: PostStatus,
+    userId?: string,
   ): Promise<PostDocument> {
+    const filter: any = { _id: postId };
+    if (userId) {
+      filter.userId = new Types.ObjectId(userId);
+    }
     return this.postModel
-      .findByIdAndUpdate(postId, { status }, { new: true })
+      .findOneAndUpdate(filter, { status }, { new: true })
       .exec() as unknown as Promise<PostDocument>;
   }
 
@@ -145,8 +150,15 @@ export class PostsService {
     }
 
     // Determine if we need to fetch fresh data
-    const lastUpdated = post.analytics?.[0]?.lastUpdated;
-    const shouldFetchFresh = !lastUpdated || (Date.now() - new Date(lastUpdated).getTime() > 3600000); // 1 hour cache
+    // Use the oldest lastUpdated across all analytics entries for cache validity
+    const lastUpdatedTimes = (post.analytics || [])
+      .map((a) => a.lastUpdated)
+      .filter(Boolean)
+      .map((d) => new Date(d).getTime());
+    const oldestLastUpdated = lastUpdatedTimes.length > 0
+      ? Math.min(...lastUpdatedTimes)
+      : null;
+    const shouldFetchFresh = !oldestLastUpdated || (Date.now() - oldestLastUpdated > 3600000); // 1 hour cache
 
     if (!shouldFetchFresh) {
       return post.analytics;
@@ -163,34 +175,13 @@ export class PostsService {
       if (!result.success || !result.platformPostId) continue;
 
       const accountItem = accountsWithTokens.find(
-        (a) => (a.account.platform as unknown as string) === (result.platform as unknown as string),
+        (a) => (a.account.platform as string) === (result.platform as string),
       );
 
       if (!accountItem) continue;
 
       try {
-        let stats: any = null;
-
-        if (result.platform === PostPlatform.FACEBOOK) {
-          stats = await this.facebookService.getPostInsights(
-            accountItem.account.accountId,
-            accountItem.decryptedToken,
-            result.platformPostId,
-          );
-        } else if (result.platform === PostPlatform.INSTAGRAM) {
-          stats = await this.instagramService.getPostInsights(
-            accountItem.account.accountId,
-            accountItem.decryptedToken,
-            result.platformPostId,
-            accountItem.decryptedToken.startsWith('IG'),
-          );
-        } else if (result.platform === PostPlatform.THREADS) {
-          stats = await this.threadsService.getPostInsights(
-            accountItem.account.accountId,
-            accountItem.decryptedToken,
-            result.platformPostId,
-          );
-        }
+        const stats = await this.fetchPlatformInsights(result.platform, accountItem, result.platformPostId);
 
         if (stats) {
           freshAnalytics.push({
@@ -218,236 +209,155 @@ export class PostsService {
     return post.analytics || [];
   }
 
+  // #21: Generic platform analytics — replaces duplicated getFacebookAnalytics / getInstagramAnalytics / getThreadsAnalytics
+  async getPlatformAnalytics(userId: string, postId: string, platform: PostPlatform) {
+    const post = await this.findOne(userId, postId);
+
+    if (post.status !== PostStatus.PUBLISHED) {
+      throw new BadRequestException('Can only fetch analytics for published posts');
+    }
+
+    const platformResult = post.publishResults?.find(
+      (r) => r.platform === platform && r.success && r.platformPostId,
+    );
+    if (!platformResult) {
+      throw new BadRequestException(`${platform} post not found or not published successfully`);
+    }
+
+    const { accountItem } = await this.resolveAccount(userId, platform);
+    const stats = await this.fetchPlatformInsights(platform, accountItem, platformResult.platformPostId as string);
+
+    if (stats) {
+      const analytics = {
+        platform,
+        likes: stats.likes || 0,
+        comments: stats.comments || 0,
+        shares: stats.shares || 0,
+        reach: stats.reach || 0,
+        impressions: stats.impressions || 0,
+        lastUpdated: new Date(),
+      };
+
+      post.analytics = (post.analytics || []).filter((a) => a.platform !== platform);
+      post.analytics.push(analytics);
+      await post.save();
+      return analytics;
+    }
+
+    return null;
+  }
+
+  // Backwards-compat wrappers
   async getFacebookAnalytics(userId: string, postId: string) {
-    const post = await this.findOne(userId, postId);
-
-    if (post.status !== PostStatus.PUBLISHED) {
-      throw new BadRequestException('Can only fetch analytics for published posts');
-    }
-
-    const fbResult = post.publishResults?.find((r) => r.platform === PostPlatform.FACEBOOK && r.success && r.platformPostId);
-    if (!fbResult) {
-      throw new BadRequestException('Facebook post not found or not published successfully');
-    }
-
-    const accountsWithTokens = await this.socialAccountsService.getAccountsForPlatforms(
-      userId,
-      [PostPlatform.FACEBOOK as unknown as SocialPlatform],
-    );
-
-    const accountItem = accountsWithTokens.find(
-      (a) => (a.account.platform as unknown as string) === (PostPlatform.FACEBOOK as unknown as string),
-    );
-
-    if (!accountItem) {
-      throw new BadRequestException('Linked Facebook account not found');
-    }
-
-    const stats = await this.facebookService.getPostInsights(
-      accountItem.account.accountId,
-      accountItem.decryptedToken,
-      fbResult.platformPostId as string,
-    );
-
-    if (stats) {
-      const fbAnalytics = {
-        platform: PostPlatform.FACEBOOK,
-        likes: stats.likes || 0,
-        comments: stats.comments || 0,
-        shares: stats.shares || 0,
-        reach: stats.reach || 0,
-        impressions: stats.impressions || 0,
-        lastUpdated: new Date(),
-      };
-
-      post.analytics = (post.analytics || []).filter((a) => a.platform !== PostPlatform.FACEBOOK);
-      post.analytics.push(fbAnalytics);
-      await post.save();
-      return fbAnalytics;
-    }
-
-    return null;
+    return this.getPlatformAnalytics(userId, postId, PostPlatform.FACEBOOK);
   }
-
   async getInstagramAnalytics(userId: string, postId: string) {
-    const post = await this.findOne(userId, postId);
-
-    if (post.status !== PostStatus.PUBLISHED) {
-      throw new BadRequestException('Can only fetch analytics for published posts');
-    }
-
-    const igResult = post.publishResults?.find((r) => r.platform === PostPlatform.INSTAGRAM && r.success && r.platformPostId);
-    if (!igResult) {
-      throw new BadRequestException('Instagram post not found or not published successfully');
-    }
-
-    const accountsWithTokens = await this.socialAccountsService.getAccountsForPlatforms(
-      userId,
-      [PostPlatform.INSTAGRAM as unknown as SocialPlatform],
-    );
-
-    const accountItem = accountsWithTokens.find(
-      (a) => (a.account.platform as unknown as string) === (PostPlatform.INSTAGRAM as unknown as string),
-    );
-
-    if (!accountItem) {
-      throw new BadRequestException('Linked Instagram account not found');
-    }
-
-    const stats = await this.instagramService.getPostInsights(
-      accountItem.account.accountId,
-      accountItem.decryptedToken,
-      igResult.platformPostId as string,
-      accountItem.decryptedToken.startsWith('IG'),
-    );
-
-    if (stats) {
-      const igAnalytics = {
-        platform: PostPlatform.INSTAGRAM,
-        likes: stats.likes || 0,
-        comments: stats.comments || 0,
-        shares: stats.shares || 0,
-        reach: stats.reach || 0,
-        impressions: stats.impressions || 0,
-        lastUpdated: new Date(),
-      };
-
-      post.analytics = (post.analytics || []).filter((a) => a.platform !== PostPlatform.INSTAGRAM);
-      post.analytics.push(igAnalytics);
-      await post.save();
-      return igAnalytics;
-    }
-
-    return null;
+    return this.getPlatformAnalytics(userId, postId, PostPlatform.INSTAGRAM);
   }
-
   async getThreadsAnalytics(userId: string, postId: string) {
-    const post = await this.findOne(userId, postId);
-
-    if (post.status !== PostStatus.PUBLISHED) {
-      throw new BadRequestException('Can only fetch analytics for published posts');
-    }
-
-    const threadsResult = post.publishResults?.find((r) => r.platform === PostPlatform.THREADS && r.success && r.platformPostId);
-    if (!threadsResult) {
-      throw new BadRequestException('Threads post not found or not published successfully');
-    }
-
-    const accountsWithTokens = await this.socialAccountsService.getAccountsForPlatforms(
-      userId,
-      [PostPlatform.THREADS as unknown as SocialPlatform],
-    );
-
-    const accountItem = accountsWithTokens.find(
-      (a) => (a.account.platform as unknown as string) === (PostPlatform.THREADS as unknown as string),
-    );
-
-    if (!accountItem) {
-      throw new BadRequestException('Linked Threads account not found');
-    }
-
-    const stats = await this.threadsService.getPostInsights(
-      accountItem.account.accountId,
-      accountItem.decryptedToken,
-      threadsResult.platformPostId as string,
-    );
-
-    if (stats) {
-      const threadsAnalytics = {
-        platform: PostPlatform.THREADS,
-        likes: stats.likes || 0,
-        comments: stats.comments || 0,
-        shares: stats.shares || 0,
-        reach: stats.reach || 0,
-        impressions: stats.impressions || 0,
-        lastUpdated: new Date(),
-      };
-
-      post.analytics = (post.analytics || []).filter((a) => a.platform !== PostPlatform.THREADS);
-      post.analytics.push(threadsAnalytics);
-      await post.save();
-      return threadsAnalytics;
-    }
-
-    return null;
+    return this.getPlatformAnalytics(userId, postId, PostPlatform.THREADS);
   }
 
+  // #22: Generic platform post deletion — replaces duplicated deleteFacebookPost / deleteInstagramPost
+  async deletePlatformPost(userId: string, postId: string, platform: PostPlatform) {
+    const post = await this.findOne(userId, postId);
+
+    // Find publish result — require platformPostId but not necessarily success=true
+    // (handles partially-failed posts that still have a platform post ID)
+    const platformResult = post.publishResults?.find(
+      (r) => (r.platform as string) === (platform as string) && r.platformPostId,
+    );
+    if (!platformResult) {
+      throw new BadRequestException(
+        `No ${platform} post ID found. The post may not have been published to ${platform}.`,
+      );
+    }
+
+    const { accountItem } = await this.resolveAccount(userId, platform);
+
+    // Execute platform-specific delete (Instagram API may not support it — graceful)
+    if (platform === PostPlatform.FACEBOOK) {
+      await this.facebookService.deletePost(
+        accountItem.account.accountId,
+        accountItem.decryptedToken,
+        platformResult.platformPostId as string,
+      );
+    } else if (platform === PostPlatform.INSTAGRAM) {
+      // Instagram Graph API does not support post deletion — returns false, not an error
+      const deleted = await this.instagramService.deleteMedia(
+        accountItem.account.accountId,
+        accountItem.decryptedToken,
+        platformResult.platformPostId as string,
+        false,
+      );
+      if (!deleted) {
+        this.logger.warn(`Instagram API deletion not supported; marking locally deleted only.`);
+      }
+    }
+
+    // Mark the platform as deleted in the DB regardless of API support
+    const resultIndex = post.publishResults.findIndex(
+      (r) => (r.platform as string) === (platform as string),
+    );
+    if (resultIndex > -1) {
+      post.publishResults[resultIndex].success = false;
+      post.publishResults[resultIndex].error = 'Post deleted from platform';
+      post.markModified('publishResults');
+      await post.save();
+    }
+
+    return { success: true, message: `${platform} post removed successfully` };
+  }
+
+
+  // Backwards-compat wrappers
   async deleteFacebookPost(userId: string, postId: string) {
-    const post = await this.findOne(userId, postId);
-
-    const fbResult = post.publishResults?.find((r) => r.platform === PostPlatform.FACEBOOK && r.success && r.platformPostId);
-    if (!fbResult) {
-      throw new BadRequestException('Facebook post not found or not published successfully');
-    }
-
-    const accountsWithTokens = await this.socialAccountsService.getAccountsForPlatforms(
-      userId,
-      [PostPlatform.FACEBOOK as unknown as SocialPlatform],
-    );
-
-    const accountItem = accountsWithTokens.find(
-      (a) => (a.account.platform as unknown as string) === (PostPlatform.FACEBOOK as unknown as string),
-    );
-
-    if (!accountItem) {
-      throw new BadRequestException('Linked Facebook account not found');
-    }
-
-    await this.facebookService.deletePost(
-      accountItem.account.accountId,
-      accountItem.decryptedToken,
-      fbResult.platformPostId as string,
-    );
-
-    // Optionally mark the platform as deleted in the DB
-    const resultIndex = post.publishResults.findIndex((r) => r.platform === PostPlatform.FACEBOOK);
-    if (resultIndex > -1) {
-      post.publishResults[resultIndex].success = false;
-      post.publishResults[resultIndex].error = 'Post deleted from platform';
-      post.markModified('publishResults');
-      await post.save();
-    }
-
-    return { success: true, message: 'Facebook post deleted successfully' };
+    return this.deletePlatformPost(userId, postId, PostPlatform.FACEBOOK);
+  }
+  async deleteInstagramPost(userId: string, postId: string) {
+    return this.deletePlatformPost(userId, postId, PostPlatform.INSTAGRAM);
   }
 
-  async deleteInstagramPost(userId: string, postId: string) {
-    const post = await this.findOne(userId, postId);
+  // --- Private helpers ---
 
-    const igResult = post.publishResults?.find((r) => r.platform === PostPlatform.INSTAGRAM && r.success && r.platformPostId);
-    if (!igResult) {
-      throw new BadRequestException('Instagram post not found or not published successfully');
-    }
-
+  private async resolveAccount(userId: string, platform: PostPlatform) {
     const accountsWithTokens = await this.socialAccountsService.getAccountsForPlatforms(
       userId,
-      [PostPlatform.INSTAGRAM as unknown as SocialPlatform],
+      [platform as unknown as SocialPlatform],
     );
 
     const accountItem = accountsWithTokens.find(
-      (a) => (a.account.platform as unknown as string) === (PostPlatform.INSTAGRAM as unknown as string),
+      (a) => (a.account.platform as string) === (platform as string),
     );
 
     if (!accountItem) {
-      throw new BadRequestException('Linked Instagram account not found');
+      throw new BadRequestException(`Linked ${platform} account not found`);
     }
 
-    await this.instagramService.deleteMedia(
-      accountItem.account.accountId,
-      accountItem.decryptedToken,
-      igResult.platformPostId as string,
-      accountItem.decryptedToken.startsWith('IG'),
-    );
+    return { accountItem };
+  }
 
-    // Optionally mark the platform as deleted in the DB
-    const resultIndex = post.publishResults.findIndex((r) => r.platform === PostPlatform.INSTAGRAM);
-    if (resultIndex > -1) {
-      post.publishResults[resultIndex].success = false;
-      post.publishResults[resultIndex].error = 'Post deleted from platform';
-      post.markModified('publishResults');
-      await post.save();
+  private async fetchPlatformInsights(platform: PostPlatform, accountItem: any, platformPostId: string) {
+    if (platform === PostPlatform.FACEBOOK) {
+      return this.facebookService.getPostInsights(
+        accountItem.account.accountId,
+        accountItem.decryptedToken,
+        platformPostId,
+      );
+    } else if (platform === PostPlatform.INSTAGRAM) {
+      return this.instagramService.getPostInsights(
+        accountItem.account.accountId,
+        accountItem.decryptedToken,
+        platformPostId,
+        false,
+      );
+    } else if (platform === PostPlatform.THREADS) {
+      return this.threadsService.getPostInsights(
+        accountItem.account.accountId,
+        accountItem.decryptedToken,
+        platformPostId,
+      );
     }
-
-    return { success: true, message: 'Instagram post deleted successfully' };
+    return null;
   }
 }

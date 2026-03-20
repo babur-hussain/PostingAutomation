@@ -9,24 +9,30 @@ export class LocationsService {
         try {
             if (!query || query.trim() === '') return [];
 
-            const response = await axios.get('https://nominatim.openstreetmap.org/search', {
+            const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+            if (!apiKey) {
+                this.logger.error('GOOGLE_MAPS_API_KEY is not defined in the environment variables.');
+                return [];
+            }
+
+            const response = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
                 params: {
-                    q: query,
-                    format: 'json',
-                    limit: 10,
+                    query: query,
+                    key: apiKey,
                 },
-                headers: {
-                    'User-Agent': 'PostingAutomationApp/1.0',
-                }
             });
 
-            return response.data.map((place: any) => ({
-                name: place.display_name,
-                lat: parseFloat(place.lat),
-                lng: parseFloat(place.lon),
+            if (!response.data || !response.data.results) {
+                return [];
+            }
+
+            return response.data.results.map((place: any) => ({
+                name: `${place.name}${place.formatted_address ? `, ${place.formatted_address}` : ''}`,
+                lat: place.geometry.location.lat,
+                lng: place.geometry.location.lng,
             }));
         } catch (error: any) {
-            this.logger.error(`Failed to geocode location query '${query}': ${error.message}`);
+            this.logger.error(`Failed to geocode location query '${query}' via Google Maps: ${error.message}`);
             return [];
         }
     }

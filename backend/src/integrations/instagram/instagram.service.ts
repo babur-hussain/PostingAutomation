@@ -301,6 +301,8 @@ export class InstagramService {
 
   /**
    * Delete an Instagram post (media) by its platformPostId.
+   * NOTE: Instagram Graph API does NOT support deleting published posts.
+   * This method attempts the call but returns false gracefully instead of throwing.
    */
   async deleteMedia(
     igAccountId: string,
@@ -309,7 +311,7 @@ export class InstagramService {
     isNativeToken: boolean = false,
   ): Promise<boolean> {
     try {
-      this.logger.log(`Deleting Instagram post: ${platformPostId}`);
+      this.logger.log(`Attempting to delete Instagram post: ${platformPostId}`);
 
       const apiBase = isNativeToken
         ? `https://graph.instagram.com/v21.0`
@@ -320,10 +322,13 @@ export class InstagramService {
       });
       return true;
     } catch (error) {
-      this.logger.error(
-        `Failed to delete Instagram post: ${error?.response?.data?.error?.message || error.message}`,
+      const apiError = error?.response?.data?.error;
+      // Instagram does not support deleting published posts via API — gracefully ignore 400/400-class errors
+      this.logger.warn(
+        `Instagram post deletion not supported by API (expected): ${apiError?.message || error?.message}`,
       );
-      throw error;
+      // Return false to signal API call was skipped, but don't throw
+      return false;
     }
   }
 }

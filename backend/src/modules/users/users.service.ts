@@ -2,6 +2,7 @@ import { Injectable, ConflictException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { User, UserDocument } from './schemas/user.schema';
 
 @Injectable()
@@ -61,9 +62,7 @@ export class UsersService {
       }
     }
 
-    const randomPassword =
-      Math.random().toString(36).slice(-8) +
-      Math.random().toString(36).slice(-8);
+    const randomPassword = crypto.randomBytes(16).toString('hex');
     const hashedPassword = await bcrypt.hash(randomPassword, 12);
 
     user = new this.userModel({

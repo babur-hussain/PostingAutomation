@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 
@@ -12,7 +12,9 @@ export class PostSchedulerService {
     const delay = scheduledTime.getTime() - Date.now();
 
     if (delay < 0) {
-      throw new Error('Cannot schedule post in the past');
+      throw new BadRequestException(
+        'The scheduled time is in the past. Please choose a future date and time.',
+      );
     }
 
     const job = await this.postsQueue.add(

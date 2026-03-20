@@ -19,10 +19,17 @@ export class InstagramProvider {
    * Scopes for Instagram Business Login:
    * - instagram_business_basic: Read profile info and media
    * - instagram_business_content_publish: Publish media to Instagram
+   * - instagram_business_manage_messages: (future) DM management
+   * - instagram_manage_comments: Manage comments on posts
+   * - instagram_manage_insights: Read analytics/insights
+   * - instagram_manage_contents: Delete posts from Instagram
    */
   static readonly SCOPES = [
     'instagram_business_basic',
     'instagram_business_content_publish',
+    'instagram_manage_comments',
+    'instagram_manage_insights',
+    'instagram_manage_contents',
   ];
 
   private readonly appId: string;

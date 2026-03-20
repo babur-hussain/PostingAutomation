@@ -7,6 +7,8 @@ import {
   MaxLength,
   ValidateNested,
   IsNumber,
+  ArrayMaxSize,
+  ArrayUnique,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PostPlatform } from '../schemas/post.schema';
@@ -30,11 +32,14 @@ export class CreatePostDto {
   caption?: string;
 
   @IsOptional()
-  @IsString()
-  mediaUrl?: string;
+  @IsArray()
+  @IsString({ each: true })
+  mediaUrls?: string[];
 
   @IsArray()
   @IsEnum(PostPlatform, { each: true })
+  @ArrayMaxSize(5, { message: 'Cannot publish to more than 5 platforms at once' })
+  @ArrayUnique({ message: 'Duplicate platforms are not allowed' })
   platforms: PostPlatform[];
 
   @IsOptional()

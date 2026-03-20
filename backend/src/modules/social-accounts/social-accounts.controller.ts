@@ -66,6 +66,9 @@ export class SocialAccountsController {
     }
 
     try {
+      // #3: Verify HMAC-signed state to prevent CSRF
+      this.socialAccountsService.verifyState(state);
+
       const result = await this.socialAccountsService.handleCallback(
         code,
         state,
@@ -158,9 +161,38 @@ export class SocialAccountsController {
   @Post('threads/deauthorize')
   @HttpCode(HttpStatus.OK)
   async threadsDeauthorize(@Body() body: any) {
-    this.logger.log(`Received Threads Deauthorize Webhook: ${JSON.stringify(body)}`);
-    // In a production app, verify the signature using app secret
-    // Parse the signed_request to get user_id and remove their account
+    this.logger.log(`Received Threads Deauthorize Webhook`);
+
+    // #5: Verify the signed_request from Meta
+    const signedRequest = body?.signed_request;
+    if (signedRequest) {
+      try {
+        const appSecret = this.configService.get<string>('threads.appSecret') || this.configService.get<string>('meta.appSecret');
+        if (appSecret) {
+          const [encodedSig, payload] = signedRequest.split('.', 2);
+          const crypto = require('crypto');
+          const expectedSig = crypto
+            .createHmac('sha256', appSecret)
+            .update(payload)
+            .digest('base64')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
+          if (encodedSig !== expectedSig) {
+            this.logger.warn('Invalid signed_request signature on Threads deauthorize webhook');
+            return { success: false, error: 'Invalid signature' };
+          }
+        } else {
+          this.logger.warn('No app secret configured — skipping webhook signature verification');
+        }
+      } catch (err) {
+        this.logger.error('Failed to verify Threads deauthorize webhook signature', err);
+        return { success: false, error: 'Signature verification failed' };
+      }
+    } else {
+      this.logger.warn('No signed_request present in Threads deauthorize webhook body');
+    }
+
     return { success: true };
   }
 
@@ -294,6 +326,14 @@ export class SocialAccountsController {
     @Body('platform') platform: SocialPlatform,
     @Body('accessToken') accessToken: string,
   ) {
+    // #4: Gate behind non-production environment
+    const nodeEnv = this.configService.get<string>('nodeEnv');
+    if (nodeEnv === 'production') {
+      throw new BadRequestException(
+        'Manual token connection is disabled in production',
+      );
+    }
+
     this.logger.log(
       `[ManualConnect] Manual token connection for platform: ${platform}`,
     );

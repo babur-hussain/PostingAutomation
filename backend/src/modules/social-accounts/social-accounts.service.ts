@@ -8,6 +8,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
+import axios from 'axios';
 import {
   SocialAccount,
   SocialAccountDocument,
@@ -36,16 +37,51 @@ export class SocialAccountsService {
     private threadsProvider: ThreadsProvider,
   ) {
     const key = this.configService.get<string>('encryption.key');
-    this.encryptionKey = Buffer.from(key || '0'.repeat(64), 'hex');
+    if (!key) {
+      throw new Error(
+        'FATAL: encryption.key is not set. Refusing to start with insecure defaults. ' +
+        'Set the ENCRYPTION_KEY environment variable (64-char hex string).',
+      );
+    }
+    this.encryptionKey = Buffer.from(key, 'hex');
   }
 
   /**
    * Get the OAuth authorization URL for the given platform.
    */
+  /**
+   * Create an HMAC-signed state parameter to prevent OAuth state forgery.
+   */
+  private signState(payload: object): string {
+    const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const signature = crypto
+      .createHmac('sha256', this.encryptionKey)
+      .update(data)
+      .digest('base64url');
+    return `${data}.${signature}`;
+  }
+
+  /**
+   * Verify and decode an HMAC-signed state parameter.
+   * Throws if the signature is invalid.
+   */
+  verifyState(state: string): { userId: string; platform: string; ts: number } {
+    const [data, signature] = state.split('.');
+    if (!data || !signature) {
+      throw new BadRequestException('Invalid OAuth state format');
+    }
+    const expected = crypto
+      .createHmac('sha256', this.encryptionKey)
+      .update(data)
+      .digest('base64url');
+    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+      throw new BadRequestException('Invalid OAuth state signature — possible CSRF attack');
+    }
+    return JSON.parse(Buffer.from(data, 'base64url').toString());
+  }
+
   async getConnectUrl(platform: SocialPlatform, userId: string): Promise<string> {
-    const state = Buffer.from(
-      JSON.stringify({ userId, platform, ts: Date.now() }),
-    ).toString('base64url');
+    const state = this.signState({ userId, platform, ts: Date.now() });
 
     switch (platform) {
       case SocialPlatform.INSTAGRAM:
@@ -71,11 +107,18 @@ export class SocialAccountsService {
     code: string,
     state: string,
   ): Promise<{ platform: SocialPlatform; accountName: string }> {
-    const stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
+    const stateData = this.verifyState(state);
     const { userId, platform } = stateData;
 
+    // #38: Upfront platform validation — only Instagram & YouTube use the generic callback
+    const supportedCallbackPlatforms: string[] = [SocialPlatform.INSTAGRAM, SocialPlatform.YOUTUBE];
+    if (!supportedCallbackPlatforms.includes(platform as string)) {
+      throw new BadRequestException(
+        `Platform "${platform}" is not supported via the generic callback. Use the platform-specific callback route.`,
+      );
+    }
+
     if (platform === SocialPlatform.INSTAGRAM) {
-      // Instagram Business Login: use Instagram's own token exchange
       return this.handleInstagramCallback(userId, code);
     } else if (platform === SocialPlatform.YOUTUBE) {
       return this.handleYouTubeCallback(userId, code);
@@ -92,7 +135,7 @@ export class SocialAccountsService {
     code: string,
     state: string,
   ): Promise<{ platform: SocialPlatform; accountName: string }> {
-    const stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
+    const stateData = this.verifyState(state);
     const { userId, platform } = stateData;
 
     if (platform !== SocialPlatform.FACEBOOK) {
@@ -387,7 +430,7 @@ export class SocialAccountsService {
 
     try {
       // Query Facebook Pages connected to this user token to find linked Instagram Business Accounts
-      const response = await require('axios').get(
+      const response = await axios.get(
         `https://graph.facebook.com/v22.0/me/accounts?fields=instagram_business_account,name,picture&access_token=${accessToken}`,
       );
 
@@ -496,6 +539,14 @@ export class SocialAccountsService {
     });
 
     return accounts.map((account) => {
+      // #31: Warn about expired tokens
+      if (account.tokenExpiry && new Date(account.tokenExpiry) < new Date()) {
+        this.logger.warn(
+          `Token for ${account.platform} account "${account.accountName}" (${account.accountId}) has expired. ` +
+          `Expired at: ${account.tokenExpiry.toISOString()}. Publishing may fail.`,
+        );
+      }
+
       const result: any = {
         account,
         decryptedToken: this.decrypt(account.accessToken),

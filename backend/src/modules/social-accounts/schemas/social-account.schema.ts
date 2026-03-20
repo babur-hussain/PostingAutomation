@@ -3,6 +3,7 @@ import { HydratedDocument, Types } from 'mongoose';
 
 export type SocialAccountDocument = HydratedDocument<SocialAccount>;
 
+// #23: Values kept in sync with PostPlatform in post.schema.ts
 export enum SocialPlatform {
   INSTAGRAM = 'instagram',
   FACEBOOK = 'facebook',

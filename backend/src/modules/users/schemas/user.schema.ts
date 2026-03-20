@@ -13,8 +13,32 @@ export class User {
 
   @Prop({ required: true, trim: true })
   name: string;
+
+  @Prop({ select: false })
+  password: string;
+
+  @Prop({ default: 'free', enum: ['free', 'pro', 'enterprise'] })
+  plan: string;
+
+  // #49: Notification preferences synced from mobile client
+  @Prop({
+    type: Object,
+    default: {
+      pushEnabled: true,
+      postReminders: true,
+      weeklyDigest: false,
+      postSuccess: true,
+      postFailure: true,
+    },
+  })
+  notificationPreferences: {
+    pushEnabled: boolean;
+    postReminders: boolean;
+    weeklyDigest: boolean;
+    postSuccess: boolean;
+    postFailure: boolean;
+  };
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
-
-UserSchema.index({ email: 1 });
+// Removed redundant UserSchema.index({ email: 1 }) — field already has unique: true

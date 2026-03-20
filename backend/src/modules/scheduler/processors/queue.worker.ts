@@ -107,11 +107,14 @@ export class QueueWorker extends WorkerHost {
           ) {
             // Only publish if there is a mediaUrl (video)
             if (post.mediaUrl) {
+              const youtubeTitle = post.caption
+                ? post.caption.substring(0, 100)
+                : 'Untitled Video';
               platformId = await this.youtubeService.publishYouTubeVideo(
                 decryptedToken,
                 post.mediaUrl,
-                post.caption, // Using caption as title
-                post.caption, // Using caption as description
+                youtubeTitle,
+                post.caption, // full caption as description
                 post.location,
               );
               success = true;
@@ -148,6 +151,7 @@ export class QueueWorker extends WorkerHost {
               decryptedToken,
               post.caption,
               post.mediaUrl,
+              post.location,
             );
             success = true;
           }
@@ -169,7 +173,15 @@ export class QueueWorker extends WorkerHost {
       }
 
       const allSuccess = results.every((r) => r.success);
-      post.status = allSuccess ? PostStatus.PUBLISHED : PostStatus.FAILED;
+      const anySuccess = results.some((r) => r.success);
+
+      if (allSuccess) {
+        post.status = PostStatus.PUBLISHED;
+      } else if (anySuccess) {
+        post.status = PostStatus.PARTIALLY_PUBLISHED;
+      } else {
+        post.status = PostStatus.FAILED;
+      }
       post.publishResults = results;
       post.markModified('publishResults');
       await post.save();

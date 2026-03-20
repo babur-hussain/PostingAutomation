@@ -7,7 +7,17 @@ export enum PostStatus {
   PENDING = 'pending',
   PROCESSING = 'processing',
   PUBLISHED = 'published',
+  PARTIALLY_PUBLISHED = 'partially_published',
   FAILED = 'failed',
+}
+
+// #23: Shared platform enum — also re-exported from social-account.schema.ts as SocialPlatform
+export enum PostPlatform {
+  INSTAGRAM = 'instagram',
+  FACEBOOK = 'facebook',
+  YOUTUBE = 'youtube',
+  X = 'x',
+  THREADS = 'threads',
 }
 
 export class PublishResult {
@@ -34,14 +44,6 @@ export class LocationInfo {
   name: string;
   lat: number;
   lng: number;
-}
-
-export enum PostPlatform {
-  INSTAGRAM = 'instagram',
-  FACEBOOK = 'facebook',
-  YOUTUBE = 'youtube',
-  X = 'x',
-  THREADS = 'threads',
 }
 
 @Schema({ timestamps: true, collection: 'posts' })
@@ -77,4 +79,4 @@ export class Post {
 export const PostSchema = SchemaFactory.createForClass(Post);
 
 PostSchema.index({ userId: 1, createdAt: -1 });
-PostSchema.index({ status: 1, scheduledTime: 1 });
+// Removed unused { status: 1, scheduledTime: 1 } index (#28) — scheduler queries by _id

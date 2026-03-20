@@ -57,6 +57,9 @@ export class Post {
   @Prop({ default: null })
   mediaUrl: string;
 
+  @Prop({ default: null })
+  thumbnailUrl: string;
+
   @Prop({ type: [String], enum: PostPlatform, required: true })
   platforms: PostPlatform[];
 

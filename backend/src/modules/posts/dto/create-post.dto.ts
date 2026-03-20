@@ -32,6 +32,10 @@ export class CreatePostDto {
   caption?: string;
 
   @IsOptional()
+  @IsString()
+  thumbnailUrl?: string;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   mediaUrls?: string[];

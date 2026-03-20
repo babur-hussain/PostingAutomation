@@ -46,6 +46,7 @@ export class PostsService {
       userId: new Types.ObjectId(userId),
       caption: dto.caption || '',
       mediaUrl: dto.mediaUrls && dto.mediaUrls.length > 0 ? dto.mediaUrls[0] : null,
+      thumbnailUrl: dto.thumbnailUrl || null,
       platforms: dto.platforms,
       scheduledTime: dto.scheduledTime ? new Date(dto.scheduledTime) : null,
       location: dto.location || null,

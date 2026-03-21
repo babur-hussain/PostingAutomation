@@ -224,11 +224,11 @@ export class InstagramService {
     igAccountId: string,
     accessToken: string,
     platformPostId: string,
-    isNativeToken: boolean = false,
   ): Promise<any> {
     try {
       this.logger.log(`Fetching insights for Instagram post: ${platformPostId}`);
 
+      const isNativeToken = accessToken?.startsWith('IG');
       const apiBase = isNativeToken
         ? `https://graph.instagram.com/v21.0`
         : `https://graph.facebook.com/${GRAPH_API_VERSION}`;
@@ -308,11 +308,11 @@ export class InstagramService {
     igAccountId: string,
     accessToken: string,
     platformPostId: string,
-    isNativeToken: boolean = false,
   ): Promise<boolean> {
     try {
       this.logger.log(`Attempting to delete Instagram post: ${platformPostId}`);
 
+      const isNativeToken = accessToken?.startsWith('IG');
       const apiBase = isNativeToken
         ? `https://graph.instagram.com/v21.0`
         : `https://graph.facebook.com/${GRAPH_API_VERSION}`;
@@ -329,6 +329,63 @@ export class InstagramService {
       );
       // Return false to signal API call was skipped, but don't throw
       return false;
+    }
+  }
+
+  /**
+   * Fetch paginated media history for an Instagram Business Account.
+   */
+  async getAccountPosts(
+    igAccountId: string,
+    accessToken: string,
+    limit: number = 10,
+    afterCursor?: string,
+  ): Promise<{ data: any[]; paging: { nextCursor?: string; hasNext: boolean } }> {
+    try {
+      this.logger.log(`Fetching media history for Instagram Account: ${igAccountId}`);
+
+      const isNativeToken = accessToken?.startsWith('IG');
+      const apiBase = isNativeToken
+        ? `https://graph.instagram.com/v21.0`
+        : `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+      const targetAccountId = isNativeToken ? 'me' : igAccountId;
+
+      const response = await axios.get(`${apiBase}/${targetAccountId}/media`, {
+        params: {
+          fields: 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp',
+          limit,
+          ...(afterCursor ? { after: afterCursor } : {}),
+          access_token: accessToken,
+        },
+      });
+
+      this.logger.warn(`RAW INSTAGRAM API RESPONSE: ${JSON.stringify(response.data)}`);
+
+      const data = response.data.data.map((item: any) => ({
+        id: item.id,
+        text: item.caption || '',
+        mediaUrl: item.media_url || undefined,
+        thumbnailUrl: item.thumbnail_url || undefined,
+        mediaType: item.media_type, // 'IMAGE', 'VIDEO', 'CAROUSEL_ALBUM'
+        permalink: item.permalink,
+        timestamp: item.timestamp,
+      }));
+
+      const paging = response.data.paging || {};
+      const nextCursor = paging.cursors?.after || undefined;
+
+      return {
+        data,
+        paging: {
+          nextCursor,
+          hasNext: !!paging.next,
+        },
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to fetch Instagram media history: ${error?.response?.data?.error?.message || error.message}`,
+      );
+      throw error;
     }
   }
 }

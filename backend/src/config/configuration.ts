@@ -37,6 +37,7 @@ export default () => ({
     redirectUri: process.env.META_REDIRECT_URI,
     instagramAppId: process.env.INSTAGRAM_APP_ID,
     instagramAppSecret: process.env.INSTAGRAM_APP_SECRET,
+    webhookVerifyToken: process.env.META_WEBHOOK_VERIFY_TOKEN || 'posting_automation_secret',
   },
 
   facebook: {

@@ -222,4 +222,52 @@ export class FacebookService {
       throw error;
     }
   }
+
+  /**
+   * Fetch paginated post history for a Facebook page.
+   */
+  async getAccountPosts(
+    pageId: string,
+    accessToken: string,
+    limit: number = 10,
+    afterCursor?: string,
+  ): Promise<{ data: any[]; paging: { nextCursor?: string; hasNext: boolean } }> {
+    try {
+      this.logger.log(`Fetching posts history for Facebook Page: ${pageId}`);
+      
+      const response = await axios.get(`${this.apiBase}/${pageId}/published_posts`, {
+        params: {
+          fields: 'id,message,created_time,full_picture,permalink_url',
+          limit,
+          ...(afterCursor ? { after: afterCursor } : {}),
+          access_token: accessToken,
+        },
+      });
+
+      const data = response.data.data.map((post: any) => ({
+        id: post.id,
+        text: post.message || '',
+        mediaUrl: post.full_picture || undefined,
+        mediaType: post.full_picture ? 'IMAGE' : 'TEXT',
+        permalink: post.permalink_url,
+        timestamp: post.created_time,
+      }));
+
+      const paging = response.data.paging || {};
+      const nextCursor = paging.cursors?.after || undefined;
+
+      return {
+        data,
+        paging: {
+          nextCursor,
+          hasNext: !!paging.next,
+        },
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to fetch Facebook posts history: ${error?.response?.data?.error?.message || error.message}`,
+      );
+      throw error;
+    }
+  }
 }

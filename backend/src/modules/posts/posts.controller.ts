@@ -42,6 +42,25 @@ export class PostsController {
     return this.postsService.findOne(userId, id);
   }
 
+  @Get('platform/:accountId')
+  getPlatformPosts(
+    @CurrentUser('userId') userId: string,
+    @Param('accountId', ParseObjectIdPipe) accountId: string,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    return this.postsService.getPlatformPosts(userId, accountId, limit ? parseInt(limit, 10) : 10, cursor);
+  }
+
+  @Get('platform/:accountId/analytics/:platformPostId')
+  getPlatformPostAnalytics(
+    @CurrentUser('userId') userId: string,
+    @Param('accountId', ParseObjectIdPipe) accountId: string,
+    @Param('platformPostId') platformPostId: string,
+  ) {
+    return this.postsService.getPlatformPostAnalytics(userId, accountId, platformPostId);
+  }
+
   @Get(':id/analytics')
   getAnalytics(@CurrentUser('userId') userId: string, @Param('id', ParseObjectIdPipe) id: string) {
     return this.postsService.getPostAnalytics(userId, id);

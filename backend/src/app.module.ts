@@ -16,6 +16,8 @@ import { MediaModule } from './modules/media/media.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import { ThreadsModule } from './integrations/threads/threads.module';
+import { MessagesModule } from './modules/messages/messages.module';
+import { WebhooksModule } from './modules/webhooks/webhooks.module';
 
 @Module({
   imports: [
@@ -43,6 +45,8 @@ import { ThreadsModule } from './integrations/threads/threads.module';
     SchedulerModule,
     LocationsModule,
     ThreadsModule,
+    MessagesModule,
+    WebhooksModule,
   ],
 })
 export class AppModule { }

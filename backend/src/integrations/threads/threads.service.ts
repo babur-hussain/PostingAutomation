@@ -342,4 +342,52 @@ export class ThreadsService {
       throw error;
     }
   }
+
+  /**
+   * Fetch paginated threads history.
+   */
+  async getAccountPosts(
+    accountId: string,
+    accessToken: string,
+    limit: number = 10,
+    afterCursor?: string,
+  ): Promise<{ data: any[]; paging: { nextCursor?: string; hasNext: boolean } }> {
+    try {
+      this.logger.log(`Fetching threads history for Account: ${accountId}`);
+
+      const response = await axios.get(`${this.apiBase}/${accountId}/threads`, {
+        params: {
+          fields: 'id,media_type,media_url,permalink,text,timestamp',
+          limit,
+          ...(afterCursor ? { after: afterCursor } : {}),
+          access_token: accessToken,
+        },
+      });
+
+      const data = response.data.data.map((item: any) => ({
+        id: item.id,
+        text: item.text || '',
+        mediaUrl: item.media_url || undefined,
+        mediaType: item.media_type, // 'TEXT', 'IMAGE', 'VIDEO', 'CAROUSEL_ALBUM'
+        permalink: item.permalink,
+        timestamp: item.timestamp,
+      }));
+
+      const paging = response.data.paging || {};
+      const nextCursor = paging.cursors?.after || undefined;
+
+      return {
+        data,
+        paging: {
+          nextCursor,
+          hasNext: !!paging.next,
+        },
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to fetch Threads history: ${error?.response?.data?.error?.message || error.message}`,
+      );
+      throw error;
+    }
+  }
 }

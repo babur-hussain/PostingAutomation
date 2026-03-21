@@ -289,7 +289,6 @@ export class PostsService {
         accountItem.account.accountId,
         accountItem.decryptedToken,
         platformResult.platformPostId as string,
-        false,
       );
       if (!deleted) {
         this.logger.warn(`Instagram API deletion not supported; marking locally deleted only.`);
@@ -358,7 +357,6 @@ export class PostsService {
         accountItem.account.accountId,
         accountItem.decryptedToken,
         platformPostId,
-        false,
       );
     } else if (platform === PostPlatform.THREADS) {
       return this.threadsService.getPostInsights(
@@ -368,5 +366,78 @@ export class PostsService {
       );
     }
     return null;
+  }
+
+  async getPlatformPosts(
+    userId: string,
+    accountId: string,
+    limit: number = 10,
+    cursor?: string,
+  ) {
+    const allTokens = await this.socialAccountsService.getAccountsForPlatforms(userId, [
+      SocialPlatform.FACEBOOK,
+      SocialPlatform.INSTAGRAM,
+      SocialPlatform.THREADS,
+    ]);
+
+    const targetAccount = allTokens.find(a => a.account._id.toString() === accountId);
+    if (!targetAccount) {
+      throw new NotFoundException('Social account not found or unsupported platform');
+    }
+
+    const platform = targetAccount.account.platform;
+    const decryptedToken = targetAccount.decryptedToken;
+    const platformAccountId = targetAccount.account.accountId;
+
+    // We can confidently assert these are supported due to the platforms array above
+    if (platform === SocialPlatform.FACEBOOK) {
+      const fbService = this.facebookService as any;
+      return fbService.getAccountPosts(platformAccountId, decryptedToken, limit, cursor);
+    } else if (platform === SocialPlatform.INSTAGRAM) {
+      const igService = this.instagramService as any;
+      return igService.getAccountPosts(platformAccountId, decryptedToken, limit, cursor);
+    } else if (platform === SocialPlatform.THREADS) {
+      const thService = this.threadsService as any;
+      return thService.getAccountPosts(platformAccountId, decryptedToken, limit, cursor);
+    }
+
+    throw new BadRequestException('Platform history not supported');
+  }
+
+  async getPlatformPostAnalytics(userId: string, accountId: string, platformPostId: string) {
+    const allTokens = await this.socialAccountsService.getAccountsForPlatforms(userId, [
+      SocialPlatform.FACEBOOK,
+      SocialPlatform.INSTAGRAM,
+      SocialPlatform.THREADS,
+    ]);
+
+    const targetAccount = allTokens.find(a => a.account._id.toString() === accountId);
+    if (!targetAccount) {
+      throw new NotFoundException('Social account not found or unsupported platform');
+    }
+
+    const { platform } = targetAccount.account;
+    
+    // Use the existing method to fetch the raw analytics from the integration
+    const stats = await this.fetchPlatformInsights(
+      platform as unknown as PostPlatform,
+      targetAccount,
+      platformPostId
+    );
+
+    if (!stats) {
+      throw new BadRequestException('Could not fetch advanced analytics for this post');
+    }
+
+    return {
+      platform,
+      platformPostId,
+      likes: stats.likes || 0,
+      comments: stats.comments || 0,
+      shares: stats.shares || 0,
+      reach: stats.reach || 0,
+      impressions: stats.impressions || 0,
+      lastUpdated: new Date()
+    };
   }
 }

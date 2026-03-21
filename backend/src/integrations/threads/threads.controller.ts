@@ -40,6 +40,38 @@ export class ThreadsController {
     return this.threadsService.getMentions(accountId, accessToken);
   }
 
+  @Get('recent-replies')
+  async getRecentReplies(@CurrentUser('userId') userId: string) {
+    const { accountId, accessToken } = await this.getAccountData(userId);
+    
+    // Fetch top 5 recent threads
+    const postsResult = await this.threadsService.getAccountPosts(accountId, accessToken, 5);
+    
+    // Fetch replies for these threads in parallel
+    let allReplies: any[] = [];
+    const promises = postsResult.data.map(async (post) => {
+      try {
+        const replies = await this.threadsService.getReplies(post.id, accessToken);
+        // attach context
+        return replies.map(r => ({ 
+          ...r, 
+          originalPostId: post.id, 
+          originalPostText: post.text 
+        }));
+      } catch (err) {
+        return [];
+      }
+    });
+
+    const results = await Promise.all(promises);
+    results.forEach(arr => { allReplies = allReplies.concat(arr); });
+    
+    // Sort by newest
+    allReplies.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    
+    return allReplies;
+  }
+
   @Get('search')
   async searchThreads(
     @CurrentUser('userId') userId: string,

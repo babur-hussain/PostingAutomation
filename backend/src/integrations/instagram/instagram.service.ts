@@ -388,4 +388,63 @@ export class InstagramService {
       throw error;
     }
   }
+
+  /**
+   * Fetch comments for an Instagram post (media).
+   */
+  async getComments(
+    igAccountId: string,
+    accessToken: string,
+    mediaId: string,
+  ): Promise<any[]> {
+    try {
+      this.logger.log(`Fetching comments for Instagram post: ${mediaId}`);
+      const isNativeToken = accessToken?.startsWith('IG');
+      const apiBase = isNativeToken
+        ? `https://graph.instagram.com/v21.0`
+        : `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+
+      const response = await axios.get(`${apiBase}/${mediaId}/comments`, {
+        params: {
+          fields: 'id,text,timestamp,username,like_count',
+          access_token: accessToken,
+        },
+      });
+
+      return response.data.data || [];
+    } catch (error: any) {
+      this.logger.warn(`Failed to fetch Instagram comments: ${error?.response?.data?.error?.message || error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Reply to an Instagram comment or post.
+   */
+  async replyToComment(
+    igAccountId: string,
+    accessToken: string,
+    targetId: string,
+    message: string,
+  ): Promise<string> {
+    try {
+      this.logger.log(`Replying to Instagram target: ${targetId}`);
+      const isNativeToken = accessToken?.startsWith('IG');
+      const apiBase = isNativeToken
+        ? `https://graph.instagram.com/v21.0`
+        : `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+
+      const response = await axios.post(`${apiBase}/${targetId}/replies`, null, {
+        params: {
+          message,
+          access_token: accessToken,
+        },
+      });
+
+      return response.data.id;
+    } catch (error: any) {
+      this.logger.error(`Failed to reply to Instagram comment/post: ${error?.response?.data?.error?.message || error.message}`);
+      throw error;
+    }
+  }
 }

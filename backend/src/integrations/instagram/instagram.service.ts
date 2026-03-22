@@ -406,12 +406,20 @@ export class InstagramService {
 
       const response = await axios.get(`${apiBase}/${mediaId}/comments`, {
         params: {
-          fields: 'id,text,timestamp,username,like_count',
+          fields: 'id,text,timestamp,username,like_count,user{profile_picture_url,username},from',
           access_token: accessToken,
         },
       });
 
-      return response.data.data || [];
+      const commentsData = response.data.data || [];
+      return commentsData.map((c: any) => ({
+        id: c.id,
+        text: c.text,
+        timestamp: c.timestamp,
+        username: c.username || c.from?.username || c.user?.username || 'Unknown User',
+        like_count: c.like_count || 0,
+        profilePictureUrl: c.user?.profile_picture_url || null,
+      }));
     } catch (error: any) {
       this.logger.warn(`Failed to fetch Instagram comments: ${error?.response?.data?.error?.message || error.message}`);
       return [];

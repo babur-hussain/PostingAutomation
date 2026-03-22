@@ -148,56 +148,71 @@ export class FacebookService {
   ): Promise<any> {
     return withRetry(async () => {
       try {
-        this.logger.log(`Fetching insights for Facebook post: ${platformPostId}`);
-        const response = await axios.get(
+        this.logger.log(`Fetching basic engagement for Facebook post: ${platformPostId}`);
+        const basicResponse = await axios.get(
           `${this.apiBase}/${platformPostId}`,
           {
             params: {
-              fields: 'shares,likes.summary(true),comments.summary(true),insights.metric(post_impressions,post_impressions_unique)',
+              fields: 'shares,likes.summary(true),comments.summary(true)',
               access_token: accessToken,
             },
           },
         );
 
-      const data = response.data;
-      const shares = data.shares?.count || 0;
-      const likes = data.likes?.summary?.total_count || 0;
-      const comments = data.comments?.summary?.total_count || 0;
+        const data = basicResponse.data;
+        const shares = data.shares?.count || 0;
+        const likes = data.likes?.summary?.total_count || 0;
+        const comments = data.comments?.summary?.total_count || 0;
 
-      let reach = 0;
-      let impressions = 0;
+        let reach = 0;
+        let impressions = 0;
 
-      if (data.insights && data.insights.data) {
-        data.insights.data.forEach((insight: any) => {
-          if (insight.name === 'post_impressions_unique') {
-            reach = insight.values[0]?.value || 0;
+        try {
+          this.logger.log(`Fetching advanced insights for Facebook post: ${platformPostId}`);
+          const insightsResponse = await axios.get(
+            `${this.apiBase}/${platformPostId}/insights`,
+            {
+              params: {
+                metric: 'post_impressions,post_impressions_unique',
+                access_token: accessToken,
+              },
+            },
+          );
+
+          const insightsData = insightsResponse.data.data;
+          if (insightsData) {
+            insightsData.forEach((insight: any) => {
+              if (insight.name === 'post_impressions_unique') {
+                reach = insight.values[0]?.value || 0;
+              }
+              if (insight.name === 'post_impressions') {
+                impressions = insight.values[0]?.value || 0;
+              }
+            });
           }
-          if (insight.name === 'post_impressions') {
-            impressions = insight.values[0]?.value || 0;
-          }
-        });
+        } catch (insightsError: any) {
+          this.logger.warn(`Advanced insights unavailable for Facebook post: ${platformPostId}. ${insightsError?.response?.data?.error?.message || insightsError.message}`);
+        }
+
+        return {
+          likes,
+          comments,
+          shares,
+          reach,
+          impressions,
+        };
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to fetch Facebook post insights: ${error?.response?.data?.error?.message || error.message}`,
+        );
+        return {
+          likes: 0,
+          comments: 0,
+          shares: 0,
+          reach: 0,
+          impressions: 0,
+        };
       }
-
-      return {
-        likes,
-        comments,
-        shares,
-        reach,
-        impressions,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Failed to fetch Facebook post insights: ${error?.response?.data?.error?.message || error.message}`,
-      );
-      // Return zeroes if insights can't be fetched (e.g. post deleted, token expired)
-      return {
-        likes: 0,
-        comments: 0,
-        shares: 0,
-        reach: 0,
-        impressions: 0,
-      };
-    }
     });
   }
 
@@ -267,6 +282,65 @@ export class FacebookService {
       this.logger.error(
         `Failed to fetch Facebook posts history: ${error?.response?.data?.error?.message || error.message}`,
       );
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch comments for a Facebook post (media).
+   */
+  async getComments(
+    pageId: string,
+    accessToken: string,
+    postId: string,
+  ): Promise<any[]> {
+    try {
+      this.logger.log(`Fetching comments for Facebook post: ${postId}`);
+
+      const response = await axios.get(`${this.apiBase}/${postId}/comments`, {
+        params: {
+          fields: 'id,message,created_time,from{id,name,picture},like_count',
+          access_token: accessToken,
+        },
+      });
+
+      const data = response.data.data || [];
+      return data.map((c: any) => ({
+        id: c.id,
+        text: c.message,
+        timestamp: c.created_time,
+        username: c.from?.name || 'Unknown User',
+        like_count: c.like_count || 0,
+        profilePictureUrl: c.from?.picture?.data?.url || null,
+      }));
+    } catch (error: any) {
+      this.logger.warn(`Failed to fetch Facebook comments: ${error?.response?.data?.error?.message || error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Reply to a Facebook comment or post.
+   */
+  async replyToComment(
+    pageId: string,
+    accessToken: string,
+    targetId: string,
+    message: string,
+  ): Promise<string> {
+    try {
+      this.logger.log(`Replying to Facebook target: ${targetId}`);
+
+      const response = await axios.post(`${this.apiBase}/${targetId}/comments`, null, {
+        params: {
+          message,
+          access_token: accessToken,
+        },
+      });
+
+      return response.data.id;
+    } catch (error: any) {
+      this.logger.error(`Failed to reply to Facebook target: ${error?.response?.data?.error?.message || error.message}`);
       throw error;
     }
   }

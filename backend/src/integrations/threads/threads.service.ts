@@ -218,7 +218,15 @@ export class ThreadsService {
           access_token: accessToken 
         },
       });
-      return response.data.data;
+      const repliesData = response.data.data || [];
+      return repliesData.map((r: any) => ({
+        id: r.id,
+        text: r.text,
+        timestamp: r.timestamp,
+        username: r.username || 'Unknown User',
+        like_count: r.like_count || 0,
+        profilePictureUrl: r.user_profile_pic || r.profile_picture_url || null,
+      }));
     } catch (error: any) {
       this.logger.error(`Failed to get replies: ${error?.response?.data?.error?.message || error.message}`);
       throw error;

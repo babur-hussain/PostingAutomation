@@ -214,7 +214,7 @@ export class ThreadsService {
       this.logger.log(`Fetching replies for thread: ${platformPostId}`);
       const response = await axios.get(`${this.apiBase}/${platformPostId}/replies`, {
         params: { 
-          fields: 'id,text,timestamp,permalink,media_url',
+          fields: 'id,text,timestamp,permalink,media_url,username',
           access_token: accessToken 
         },
       });

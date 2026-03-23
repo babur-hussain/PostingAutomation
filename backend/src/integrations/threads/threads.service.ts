@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import axios from 'axios';
 
 @Injectable()
@@ -57,7 +57,7 @@ export class ThreadsService {
     // Threads API location tagging typically requires a location_id from Meta's Pages/Places API.
     // If we have a place id mapped to location.name, we would pass it here.
     if (location && (location as any).locationId) {
-       params.location_id = (location as any).locationId;
+      params.location_id = (location as any).locationId;
     }
 
     const response = await axios.post(`${this.apiBase}/${accountId}/threads`, null, { params });
@@ -78,7 +78,7 @@ export class ThreadsService {
       access_token: accessToken,
     };
     if (location && (location as any).locationId) {
-       params.location_id = (location as any).locationId;
+      params.location_id = (location as any).locationId;
     }
 
     const response = await axios.post(`${this.apiBase}/${accountId}/threads`, null, { params });
@@ -99,7 +99,7 @@ export class ThreadsService {
       access_token: accessToken,
     };
     if (location && (location as any).locationId) {
-       params.location_id = (location as any).locationId;
+      params.location_id = (location as any).locationId;
     }
 
     const response = await axios.post(`${this.apiBase}/${accountId}/threads`, null, { params });
@@ -213,9 +213,10 @@ export class ThreadsService {
     try {
       this.logger.log(`Fetching replies for thread: ${platformPostId}`);
       const response = await axios.get(`${this.apiBase}/${platformPostId}/replies`, {
-        params: { 
-          fields: 'id,text,timestamp,permalink,media_url,username',
-          access_token: accessToken 
+        params: {
+          fields: 'id,text,timestamp,username',
+          access_token: accessToken,
+          reverse: true,
         },
       });
       const repliesData = response.data.data || [];
@@ -228,8 +229,9 @@ export class ThreadsService {
         profilePictureUrl: r.user_profile_pic || r.profile_picture_url || null,
       }));
     } catch (error: any) {
-      this.logger.error(`Failed to get replies: ${error?.response?.data?.error?.message || error.message}`);
-      throw error;
+      const apiMessage = error?.response?.data?.error?.message || error.message;
+      this.logger.error(`Failed to get replies: ${apiMessage}`);
+      throw new BadRequestException(apiMessage || 'Failed to fetch replies from Threads');
     }
   }
 
@@ -257,8 +259,9 @@ export class ThreadsService {
       // Publish the container
       return await this.publishContainer(threadsAccountId, accessToken, creationId);
     } catch (error: any) {
-      this.logger.error(`Failed to reply to thread: ${error?.response?.data?.error?.message || error.message}`);
-      throw error;
+      const apiMessage = error?.response?.data?.error?.message || error.message;
+      this.logger.error(`Failed to reply to thread: ${apiMessage}`);
+      throw new BadRequestException(apiMessage || 'Failed to send reply to Threads');
     }
   }
 

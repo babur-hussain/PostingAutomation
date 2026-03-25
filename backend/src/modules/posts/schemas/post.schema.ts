@@ -77,6 +77,13 @@ export class Post {
 
   @Prop({ type: Object, default: null })
   location?: LocationInfo;
+
+  @Prop({ type: Object, default: null })
+  platformConfig?: Record<string, {
+    mentions?: string[];
+    hashtags?: string[];
+    location?: LocationInfo;
+  }>;
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);

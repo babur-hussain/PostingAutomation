@@ -54,4 +54,11 @@ export class CreatePostDto {
   @ValidateNested()
   @Type(() => LocationDto)
   location?: LocationDto;
+
+  @IsOptional()
+  platformConfig?: Record<string, {
+    mentions?: string[];
+    hashtags?: string[];
+    location?: LocationDto;
+  }>;
 }

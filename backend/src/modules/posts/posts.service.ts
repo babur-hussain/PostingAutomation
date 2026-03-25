@@ -50,6 +50,7 @@ export class PostsService {
       platforms: dto.platforms,
       scheduledTime: dto.scheduledTime ? new Date(dto.scheduledTime) : null,
       location: dto.location || null,
+      platformConfig: dto.platformConfig || null,
       status: initialStatus,
     });
 
@@ -417,7 +418,7 @@ export class PostsService {
     }
 
     const { platform } = targetAccount.account;
-    
+
     // Use the existing method to fetch the raw analytics from the integration
     const stats = await this.fetchPlatformInsights(
       platform as unknown as PostPlatform,

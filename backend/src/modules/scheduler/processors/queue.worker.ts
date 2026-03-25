@@ -70,6 +70,25 @@ export class QueueWorker extends WorkerHost {
 
       const results: any[] = [];
 
+      // Helper: build per-platform caption with mentions & hashtags appended
+      const buildCaption = (platform: string, baseCaption: string): string => {
+        const pc = (post as any).platformConfig?.[platform];
+        if (!pc) return baseCaption;
+        let enriched = baseCaption;
+        if (pc.mentions?.length) {
+          enriched += '\n' + pc.mentions.map((m: string) => `@${m}`).join(' ');
+        }
+        if (pc.hashtags?.length) {
+          enriched += '\n' + pc.hashtags.map((h: string) => `#${h}`).join(' ');
+        }
+        return enriched;
+      };
+
+      // Helper: get per-platform location, falling back to shared location
+      const getLocation = (platform: string) => {
+        return (post as any).platformConfig?.[platform]?.location || post.location;
+      };
+
       for (const accountItem of accountsWithTokens) {
         const { account, decryptedToken } = accountItem;
         let success = false;
@@ -85,8 +104,8 @@ export class QueueWorker extends WorkerHost {
               account.accountId,
               decryptedToken,
               post.mediaUrl,
-              post.caption,
-              post.location,
+              buildCaption('instagram', post.caption),
+              getLocation('instagram'),
             );
             success = true;
           } else if (
@@ -96,9 +115,9 @@ export class QueueWorker extends WorkerHost {
             platformId = await this.facebookService.publishFacebookPost(
               account.accountId,
               decryptedToken,
-              post.caption,
+              buildCaption('facebook', post.caption),
               post.mediaUrl,
-              post.location,
+              getLocation('facebook'),
             );
             success = true;
           } else if (
@@ -107,15 +126,16 @@ export class QueueWorker extends WorkerHost {
           ) {
             // Only publish if there is a mediaUrl (video)
             if (post.mediaUrl) {
-              const youtubeTitle = post.caption
-                ? post.caption.substring(0, 100)
+              const ytCaption = buildCaption('youtube', post.caption);
+              const youtubeTitle = ytCaption
+                ? ytCaption.substring(0, 100)
                 : 'Untitled Video';
               platformId = await this.youtubeService.publishYouTubeVideo(
                 decryptedToken,
                 post.mediaUrl,
                 youtubeTitle,
-                post.caption, // full caption as description
-                post.location,
+                ytCaption, // full caption as description
+                getLocation('youtube'),
               );
               success = true;
             } else {
@@ -136,10 +156,10 @@ export class QueueWorker extends WorkerHost {
               appKey,
               appSecret,
               decryptedToken,
-              accountItem.decryptedSecret || '', // Must be returned from getAccountsForPlatforms overlay
-              post.caption,
+              accountItem.decryptedSecret || '',
+              buildCaption('x', post.caption),
               post.mediaUrl,
-              post.location,
+              getLocation('x'),
             );
             success = true;
           } else if (
@@ -149,9 +169,9 @@ export class QueueWorker extends WorkerHost {
             platformId = await this.threadsService.publishThreadsPost(
               account.accountId,
               decryptedToken,
-              post.caption,
+              buildCaption('threads', post.caption),
               post.mediaUrl,
-              post.location,
+              getLocation('threads'),
             );
             success = true;
           }

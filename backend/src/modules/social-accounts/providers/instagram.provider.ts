@@ -172,49 +172,134 @@ export class InstagramProvider {
   }
 
   /**
-   * Get basic insights for an Instagram user profile.
-   * Requires instagram_manage_insights permission.
+   * Get comprehensive insights for an Instagram user profile.
+   * Fetches metrics in safe batches to avoid a single deprecated metric killing the request.
+   * Reference: https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/insights
+   *
+   * Instagram Insights API uses:
+   *   - metric_type=total_value (returns { total_value: { value: N } })
+   *   - period=day
+   *   - since/until for time range
    */
   async getUserInsights(igUserId: string, accessToken: string): Promise<any> {
     const axios = (await import('axios')).default;
     this.logger.log(`Fetching Instagram insights for user: ${igUserId}`);
-    try {
-      // 1. Fetch metrics
-      const response = await axios.get(
-        `https://graph.instagram.com/v21.0/${igUserId}/insights`,
-        {
-          params: {
-            metric: 'impressions,reach,profile_views',
-            period: 'day',
-            access_token: accessToken,
-          },
-        },
-      ).catch(() => ({ data: { data: [] } }));
 
-      // 2. Fetch basic counts
+    // Helper: fetch a batch of metrics safely
+    const fetchMetricBatch = async (metrics: string[], period = 'day'): Promise<any[]> => {
+      try {
+        const now = Math.floor(Date.now() / 1000);
+        const oneDayAgo = now - (86400 * 2); // 2 days back to ensure data exists
+
+        const response = await axios.get(
+          `https://graph.instagram.com/v21.0/${igUserId}/insights`,
+          {
+            params: {
+              metric: metrics.join(','),
+              period,
+              metric_type: 'total_value',
+              since: oneDayAgo,
+              until: now,
+              access_token: accessToken,
+            },
+          },
+        );
+        return response.data?.data || [];
+      } catch (err: any) {
+        this.logger.warn(`IG Insights batch [${metrics.join(',')}] failed: ${err?.response?.data?.error?.message || err?.message}`);
+        return [];
+      }
+    };
+
+    try {
+      // ── 1. Profile metadata (always works) ──
       const profileResponse = await axios.get(
         `https://graph.instagram.com/v21.0/${igUserId}`,
         {
           params: {
-            fields: 'followers_count,media_count',
+            fields: 'user_id,username,name,profile_picture_url,followers_count,follows_count,media_count,biography,website',
             access_token: accessToken,
           },
         },
-      ).catch(() => ({ data: {} }));
+      ).catch((err: any) => {
+        this.logger.error(`IG Profile Error: ${JSON.stringify(err?.response?.data || err?.message)}`);
+        return { data: {} };
+      });
 
-      const data = response.data?.data || [];
+      const profile = profileResponse.data || {};
+      this.logger.log(`IG Profile raw data: ${JSON.stringify(profile)}`);
+
+      // ── 2. Insights: fetch in safe batches ──
+      // Batch 1: Reach & engagement core
+      const engagementData = await fetchMetricBatch([
+        'accounts_engaged',
+        'reach',
+        'total_interactions',
+      ]);
+
+      // Batch 2: Content interaction specifics
+      const interactionData = await fetchMetricBatch([
+        'likes',
+        'comments',
+        'shares',
+        'saves',
+      ]);
+
+      // Batch 3: Additional engagement
+      const additionalData = await fetchMetricBatch([
+        'replies',
+        'reposts',
+        'profile_links_taps',
+      ]);
+
+      // Batch 4: Follows
+      const followsData = await fetchMetricBatch([
+        'follows_and_unfollows',
+      ]);
+
+      // Batch 5: Views
+      const viewsData = await fetchMetricBatch([
+        'views',
+      ]);
+
+      // ── 3. Assemble result ──
       const result: any = {
-        followers: profileResponse.data.followers_count || 0,
-        total_posts: profileResponse.data.media_count || 0,
+        // Profile metadata
+        followers: profile.followers_count || 0,
+        following: profile.follows_count || 0,
+        total_posts: profile.media_count || 0,
+        name: profile.name || null,
+        username: profile.username || null,
+        biography: profile.biography || null,
+        website: profile.website || null,
+        profilePicture: profile.profile_picture_url || null,
       };
 
-      data.forEach((item: any) => {
-        result[item.name] = item.values[0]?.value || 0;
+      // Merge all insight batches
+      // Instagram insights use total_value.value format
+      const allInsights = [...engagementData, ...interactionData, ...additionalData, ...followsData, ...viewsData];
+      this.logger.log(`IG Insights received ${allInsights.length} metric items`);
+
+      allInsights.forEach((item: any) => {
+        // Handle total_value format (new Instagram API)
+        if (item.total_value !== undefined) {
+          if (typeof item.total_value === 'object' && item.total_value.value !== undefined) {
+            result[item.name] = item.total_value.value;
+          } else {
+            result[item.name] = item.total_value;
+          }
+        }
+        // Handle legacy values[] format (fallback)
+        else if (item.values && item.values.length > 0) {
+          result[item.name] = item.values[item.values.length - 1]?.value || 0;
+        }
       });
+
+      this.logger.log(`IG Final result keys: ${Object.keys(result).join(', ')}`);
       return result;
     } catch (err: any) {
       this.logger.error(`Failed to fetch IG insights: ${err?.response?.data?.error?.message || err.message}`);
-      return { followers: 0, total_posts: 0, impressions: 0, reach: 0, profile_views: 0 };
+      return { followers: 0, total_posts: 0 };
     }
   }
 }

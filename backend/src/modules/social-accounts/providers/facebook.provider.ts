@@ -17,6 +17,8 @@ export class FacebookProvider {
     'pages_manage_posts',
     'pages_read_engagement',
     'pages_read_user_content',
+    'read_insights',
+    'pages_show_list',
   ];
 
   private readonly appId: string;
@@ -169,53 +171,122 @@ export class FacebookProvider {
   }
 
   /**
-   * Get basic insights for a Facebook Page.
+   * Get comprehensive insights for a Facebook Page.
+   * Fetches metrics in safe batches to avoid a single deprecated metric killing the entire request.
+   * Reference: https://developers.facebook.com/docs/graph-api/reference/page/insights/
    */
   async getPageInsights(accessToken: string, pageId: string): Promise<any> {
     const axios = (await import('axios')).default;
     this.logger.log(`Fetching Facebook insights for page: ${pageId}`);
-    try {
-      // 1. Fetch metrics
-      const response = await axios.get(
-        `https://graph.facebook.com/${GRAPH_API_VERSION}/${pageId}/insights`,
-        {
-          params: {
-            metric: 'page_impressions,page_post_engagements,page_fans,page_views_total,page_video_views',
-            period: 'day',
-            access_token: accessToken,
-          },
-        },
-      ).catch(() => ({ data: { data: [] } }));
 
-      // 2. Fetch basic counts and profile metadata
+    // Helper: fetch a batch of metrics safely
+    const fetchMetricBatch = async (metrics: string[], period = 'day'): Promise<any[]> => {
+      try {
+        const response = await axios.get(
+          `https://graph.facebook.com/${GRAPH_API_VERSION}/${pageId}/insights`,
+          {
+            params: {
+              metric: metrics.join(','),
+              period,
+              access_token: accessToken,
+            },
+          },
+        );
+        return response.data?.data || [];
+      } catch (err: any) {
+        this.logger.warn(`FB Insights batch [${metrics.join(',')}] failed: ${err?.response?.data?.error?.message || err?.message}`);
+        return [];
+      }
+    };
+
+    try {
+      // ── 1. Profile metadata (always works, no read_insights needed) ──
       const profileResponse = await axios.get(
         `https://graph.facebook.com/${GRAPH_API_VERSION}/${pageId}`,
         {
           params: {
-            fields: 'followers_count,fan_count,about,bio,description,category,website,name,username',
+            fields: 'followers_count,fan_count,about,bio,description,category,website,name,username,picture.width(200),cover,new_like_count,talking_about_count,were_here_count,rating_count,overall_star_rating,phone,single_line_address,link',
             access_token: accessToken,
           },
         },
-      ).catch(() => ({ data: {} }));
+      ).catch((err: any) => {
+        this.logger.error(`FB Profile Metadata Error: ${JSON.stringify(err?.response?.data || err?.message)}`);
+        return { data: {} };
+      });
 
-      const data = response.data?.data || [];
+      const profile = profileResponse.data || {};
+      this.logger.log(`FB Profile raw data: ${JSON.stringify(profile)}`);
+
+      // ── 2. Insights: fetch in safe batches ──
+      // Batch 1: Engagement metrics
+      const engagementData = await fetchMetricBatch([
+        'page_post_engagements',
+        'page_total_actions',
+        'page_daily_follows',
+        'page_daily_follows_unique',
+        'page_daily_unfollows_unique',
+        'page_follows',
+      ]);
+
+      // Batch 2: Views metrics
+      const viewsData = await fetchMetricBatch([
+        'page_views_total',
+      ]);
+
+      // Batch 3: Video metrics
+      const videoData = await fetchMetricBatch([
+        'page_video_views',
+        'page_video_views_unique',
+        'page_video_complete_views_30s',
+      ]);
+
+      // Batch 4: Media view metrics
+      const mediaData = await fetchMetricBatch([
+        'page_media_view',
+      ]);
+
+      // Batch 5: Post impressions
+      const postImpressionData = await fetchMetricBatch([
+        'page_posts_impressions',
+        'page_posts_impressions_unique',
+      ]);
+
+      // ── 3. Assemble result ──
       const result: any = {
-        followers: profileResponse.data.followers_count || profileResponse.data.fan_count || 0,
-        name: profileResponse.data.name || null,
-        username: profileResponse.data.username || null,
-        about: profileResponse.data.about || profileResponse.data.bio || profileResponse.data.description || null,
-        category: profileResponse.data.category || null,
-        website: profileResponse.data.website || null,
+        // Profile metadata
+        followers: profile.followers_count || profile.fan_count || 0,
+        page_fans: profile.fan_count || profile.followers_count || 0,
+        name: profile.name || null,
+        username: profile.username || null,
+        about: profile.about || profile.bio || profile.description || null,
+        category: profile.category || null,
+        website: profile.website || null,
+        profilePicture: profile.picture?.data?.url || null,
+        coverPhoto: profile.cover?.source || null,
+        link: profile.link || null,
+        phone: profile.phone || null,
+        address: profile.single_line_address || null,
+        talking_about_count: profile.talking_about_count || 0,
+        were_here_count: profile.were_here_count || 0,
+        new_like_count: profile.new_like_count || 0,
+        rating_count: profile.rating_count || 0,
+        overall_star_rating: profile.overall_star_rating || 0,
       };
 
-      data.forEach((item: any) => {
-        // Facebook returns an array of values for different days, get the most recent one
-        result[item.name] = item.values[item.values.length - 1]?.value || 0;
+      // Merge all insight batches
+      const allInsights = [...engagementData, ...viewsData, ...videoData, ...mediaData, ...postImpressionData];
+      this.logger.log(`FB Insights received ${allInsights.length} metric items`);
+
+      allInsights.forEach((item: any) => {
+        const val = item.values?.[item.values.length - 1]?.value;
+        result[item.name] = val !== undefined ? val : 0;
       });
+
+      this.logger.log(`FB Final result keys: ${Object.keys(result).join(', ')}`);
       return result;
     } catch (err: any) {
       this.logger.error(`Failed to fetch FB insights: ${err?.response?.data?.error?.message || err.message}`);
-      return { followers: 0, page_impressions: 0, page_post_engagements: 0, page_fans: 0 };
+      return { followers: 0, page_post_engagements: 0, page_fans: 0 };
     }
   }
 }

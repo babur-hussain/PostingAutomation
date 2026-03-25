@@ -386,38 +386,24 @@ export class SocialAccountsController {
 
       const { account, decryptedToken } = accountsWithTokens[0];
       const results: any[] = [];
+      const axios = (await import('axios')).default;
 
       if (platform === 'instagram') {
-        // Use Instagram Business Discovery API for exact username lookup
+        // Instagram Business Discovery API — exact username lookup
+        // Docs: GET /{ig-user-id}?fields=business_discovery.fields(...){@username}
         try {
-          const response = await (await import('axios')).default.get(
+          this.logger.log(`[SearchUsers] Instagram BD lookup for: ${query}`);
+          const bdResponse = await axios.get(
             `https://graph.facebook.com/v25.0/${account.accountId}`,
             {
               params: {
-                fields: `business_discovery.fields(username,name,profile_picture_url,biography,followers_count){username,name,profile_picture_url}`,
-                access_token: decryptedToken,
-              },
-              // Use a partial username query via business_discovery
-            },
-          );
-          // business_discovery requires exact username, so we'll try the query as-is
-          // For a more search-like experience, we query the account's own data
-        } catch {
-          // Business Discovery requires exact username match, silently fail
-        }
-
-        // Try exact username lookup via Business Discovery
-        try {
-          const bdResponse = await (await import('axios')).default.get(
-            `https://graph.facebook.com/v25.0/${account.accountId}`,
-            {
-              params: {
-                fields: `business_discovery.fields(username,name,profile_picture_url).username(${query})`,
+                fields: `business_discovery.fields(username,name,profile_picture_url,followers_count){@${query}}`,
                 access_token: decryptedToken,
               },
             },
           );
           const bd = bdResponse.data?.business_discovery;
+          this.logger.log(`[SearchUsers] Instagram BD result: ${JSON.stringify(bd)}`);
           if (bd) {
             results.push({
               username: bd.username,
@@ -426,13 +412,14 @@ export class SocialAccountsController {
               platform: 'instagram',
             });
           }
-        } catch {
-          // Username not found or not a business account
+        } catch (err: any) {
+          this.logger.warn(`[SearchUsers] Instagram BD failed for "${query}": ${err?.response?.data?.error?.message || err.message}`);
         }
       } else if (platform === 'facebook') {
-        // Facebook Page Search
+        // Facebook Page Search API
         try {
-          const fbResponse = await (await import('axios')).default.get(
+          this.logger.log(`[SearchUsers] Facebook page search for: ${query}`);
+          const fbResponse = await axios.get(
             `https://graph.facebook.com/v25.0/pages/search`,
             {
               params: {
@@ -444,6 +431,7 @@ export class SocialAccountsController {
             },
           );
           const pages = fbResponse.data?.data || [];
+          this.logger.log(`[SearchUsers] Facebook found ${pages.length} pages`);
           for (const page of pages) {
             results.push({
               username: page.username || page.name,
@@ -454,35 +442,48 @@ export class SocialAccountsController {
             });
           }
         } catch (err: any) {
-          this.logger.warn(`Facebook page search failed: ${err?.response?.data?.error?.message || err.message}`);
+          this.logger.warn(`[SearchUsers] Facebook search failed: ${err?.response?.data?.error?.message || err.message}`);
         }
       } else if (platform === 'threads') {
-        // Threads doesn't have a search API, but we can use username validation
-        // via the Threads API profile fields
+        // Threads API does not support user search.
+        // However, Threads usernames mirror Instagram usernames.
+        // We can find the user's connected Instagram account and use its token for Business Discovery.
         try {
-          const threadsResponse = await (await import('axios')).default.get(
-            `https://graph.threads.net/v1.0/${account.accountId}`,
-            {
-              params: {
-                fields: `business_discovery.fields(username,name,threads_profile_picture_url).username(${query})`,
-                access_token: decryptedToken,
+          this.logger.log(`[SearchUsers] Threads: attempting Instagram BD fallback for query="${query}"`);
+          const igAccounts = await this.socialAccountsService.getAccountsForPlatforms(userId, ['instagram' as any]);
+          if (igAccounts && igAccounts.length > 0) {
+            const igAccount = igAccounts[0].account;
+            const igToken = igAccounts[0].decryptedToken;
+
+            const bdResponse = await axios.get(
+              `https://graph.facebook.com/v25.0/${igAccount.accountId}`,
+              {
+                params: {
+                  fields: `business_discovery.fields(username,name,profile_picture_url){@${query}}`,
+                  access_token: igToken,
+                },
               },
-            },
-          );
-          const bd = threadsResponse.data?.business_discovery;
-          if (bd) {
-            results.push({
-              username: bd.username,
-              name: bd.name || bd.username,
-              profilePicture: bd.threads_profile_picture_url,
-              platform: 'threads',
-            });
+            );
+            const bd = bdResponse.data?.business_discovery;
+            if (bd) {
+              results.push({
+                username: bd.username,
+                name: bd.name || bd.username,
+                profilePicture: bd.profile_picture_url, // This is the IG pic, but usually the same as Threads
+                platform: 'threads',
+              });
+            }
+          } else {
+            this.logger.log(`[SearchUsers] Threads: No connected Instagram account found to perform fallback lookup.`);
           }
-        } catch {
-          // Username lookup failed
+        } catch (err: any) {
+          this.logger.warn(`[SearchUsers] Threads Instagram fallback failed for "${query}": ${err?.response?.data?.error?.message || err.message}`);
         }
+      } else if (platform === 'x') {
+        this.logger.log(`[SearchUsers] X: no search API available for user lookup`);
       }
 
+      this.logger.log(`[SearchUsers] Returning ${results.length} results for platform=${platform}, q=${query}`);
       return { results };
     } catch (error: any) {
       this.logger.error(`User search failed: ${error.message}`);

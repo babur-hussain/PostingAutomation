@@ -366,7 +366,7 @@ export class SocialAccountsController {
   @Get('search-users')
   @UseGuards(FirebaseAuthGuard)
   async searchUsers(
-    @CurrentUser() userId: string,
+    @CurrentUser('userId') userId: string,
     @Query('platform') platform: string,
     @Query('q') query: string,
   ) {

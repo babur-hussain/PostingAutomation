@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 
-const GRAPH_API_VERSION = 'v25.0';
+const GRAPH_API_VERSION = 'v19.0';
 
 /**
  * Standalone Facebook OAuth provider.
@@ -15,9 +15,8 @@ export class FacebookProvider {
   // Facebook Pages specific requested scopes
   static readonly SCOPES = [
     'pages_manage_posts',
-    'pages_show_list',
     'pages_read_engagement',
-    'pages_messaging',
+    'pages_read_user_content',
   ];
 
   private readonly appId: string;
@@ -42,7 +41,15 @@ export class FacebookProvider {
       state,
       locale: 'en_US',
     });
-    return `https://www.facebook.com/${GRAPH_API_VERSION}/dialog/oauth?${params.toString()}`;
+    const url = `https://www.facebook.com/${GRAPH_API_VERSION}/dialog/oauth?${params.toString()}`;
+    this.logger.debug(`[FacebookProvider] Generated Auth URL: ${url}`);
+    
+    // Also verify app ID is loaded on server
+    if (!this.appId) {
+      this.logger.error('[FacebookProvider] FATAL: appId is empty! Check environment variables (FACEBOOK_APP_ID).');
+    }
+    
+    return url;
   }
 
   /**
@@ -173,19 +180,19 @@ export class FacebookProvider {
         `https://graph.facebook.com/${GRAPH_API_VERSION}/${pageId}/insights`,
         {
           params: {
-            metric: 'page_impressions,page_post_engagements,page_fans',
+            metric: 'page_impressions,page_post_engagements,page_fans,page_views_total,page_video_views',
             period: 'day',
             access_token: accessToken,
           },
         },
       ).catch(() => ({ data: { data: [] } }));
 
-      // 2. Fetch basic counts
+      // 2. Fetch basic counts and profile metadata
       const profileResponse = await axios.get(
         `https://graph.facebook.com/${GRAPH_API_VERSION}/${pageId}`,
         {
           params: {
-            fields: 'followers_count,fan_count',
+            fields: 'followers_count,fan_count,about,bio,description,category,website,name,username',
             access_token: accessToken,
           },
         },
@@ -194,6 +201,11 @@ export class FacebookProvider {
       const data = response.data?.data || [];
       const result: any = {
         followers: profileResponse.data.followers_count || profileResponse.data.fan_count || 0,
+        name: profileResponse.data.name || null,
+        username: profileResponse.data.username || null,
+        about: profileResponse.data.about || profileResponse.data.bio || profileResponse.data.description || null,
+        category: profileResponse.data.category || null,
+        website: profileResponse.data.website || null,
       };
 
       data.forEach((item: any) => {

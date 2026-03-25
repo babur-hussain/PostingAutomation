@@ -383,101 +383,62 @@ export class SocialAccountsController {
       if (accountsWithTokens.length === 0) {
         return { results: [] };
       }
-
-      const { account, decryptedToken } = accountsWithTokens[0];
       const results: any[] = [];
       const axios = (await import('axios')).default;
 
-      if (platform === 'instagram') {
-        // Instagram Business Discovery API — exact username lookup
-        // Docs: GET /{ig-user-id}?fields=business_discovery.fields(...){@username}
-        try {
-          this.logger.log(`[SearchUsers] Instagram BD lookup for: ${query}`);
-          const bdResponse = await axios.get(
-            `https://graph.facebook.com/v25.0/${account.accountId}`,
-            {
-              params: {
-                fields: `business_discovery.fields(username,name,profile_picture_url,followers_count){@${query}}`,
-                access_token: decryptedToken,
-              },
-            },
-          );
-          const bd = bdResponse.data?.business_discovery;
-          this.logger.log(`[SearchUsers] Instagram BD result: ${JSON.stringify(bd)}`);
-          if (bd) {
-            results.push({
-              username: bd.username,
-              name: bd.name || bd.username,
-              profilePicture: bd.profile_picture_url,
-              platform: 'instagram',
-            });
-          }
-        } catch (err: any) {
-          this.logger.warn(`[SearchUsers] Instagram BD failed for "${query}": ${err?.response?.data?.error?.message || err.message}`);
+      // Facebook Page Search is the ONLY Meta API that allows open name/username searching.
+      // Instagram's business_discovery requires Facebook Page tokens and specific IG User IDs,
+      // which we don't have if the user used the New Instagram Login API (IGAA tokens).
+      // Threads has no search API.
+      // Therefore, if the platform is FB, IG, or Threads, we will try to use the user's
+      // connected Facebook account to perform a Facebook Page Search as a robust proxy/fallback.
+      
+      let searchToken: string | null = null;
+
+      if (platform === 'facebook') {
+        // If searching directly for Facebook, we already have the token.
+        searchToken = accountsWithTokens[0].decryptedToken; // Use the token from the requested platform
+      } else if (platform === 'instagram' || platform === 'threads') {
+        // For Instagram/Threads, try to find a connected Facebook account to use its EAA token
+        const fbAccounts = await this.socialAccountsService.getAccountsForPlatforms(userId, ['facebook' as any]);
+        if (fbAccounts && fbAccounts.length > 0) {
+          searchToken = fbAccounts[0].decryptedToken;
+          this.logger.log(`[SearchUsers] ${platform}: using Facebook page search fallback`);
+        } else {
+          this.logger.log(`[SearchUsers] ${platform}: no connected Facebook account found for search fallback. Returning empty (manual entry).`);
         }
-      } else if (platform === 'facebook') {
-        // Facebook Page Search API
+      }
+
+      if (searchToken) {
         try {
-          this.logger.log(`[SearchUsers] Facebook page search for: ${query}`);
+          this.logger.log(`[SearchUsers] Executing Facebook page search for: ${query}`);
           const fbResponse = await axios.get(
             `https://graph.facebook.com/v25.0/pages/search`,
             {
               params: {
                 q: query,
                 fields: 'id,name,picture,username',
-                access_token: decryptedToken,
+                access_token: searchToken,
                 limit: 10,
               },
             },
           );
           const pages = fbResponse.data?.data || [];
-          this.logger.log(`[SearchUsers] Facebook found ${pages.length} pages`);
+          this.logger.log(`[SearchUsers] Found ${pages.length} surrogate pages`);
           for (const page of pages) {
-            results.push({
-              username: page.username || page.name,
-              name: page.name,
-              profilePicture: page.picture?.data?.url,
-              platform: 'facebook',
-              pageId: page.id,
-            });
-          }
-        } catch (err: any) {
-          this.logger.warn(`[SearchUsers] Facebook search failed: ${err?.response?.data?.error?.message || err.message}`);
-        }
-      } else if (platform === 'threads') {
-        // Threads API does not support user search.
-        // However, Threads usernames mirror Instagram usernames.
-        // We can find the user's connected Instagram account and use its token for Business Discovery.
-        try {
-          this.logger.log(`[SearchUsers] Threads: attempting Instagram BD fallback for query="${query}"`);
-          const igAccounts = await this.socialAccountsService.getAccountsForPlatforms(userId, ['instagram' as any]);
-          if (igAccounts && igAccounts.length > 0) {
-            const igAccount = igAccounts[0].account;
-            const igToken = igAccounts[0].decryptedToken;
-
-            const bdResponse = await axios.get(
-              `https://graph.facebook.com/v25.0/${igAccount.accountId}`,
-              {
-                params: {
-                  fields: `business_discovery.fields(username,name,profile_picture_url){@${query}}`,
-                  access_token: igToken,
-                },
-              },
-            );
-            const bd = bdResponse.data?.business_discovery;
-            if (bd) {
+            // Only add pages that have a username or name we can use. Note: some pages don't have a username string.
+            if (page.username || page.name) {
               results.push({
-                username: bd.username,
-                name: bd.name || bd.username,
-                profilePicture: bd.profile_picture_url, // This is the IG pic, but usually the same as Threads
-                platform: 'threads',
+                username: page.username || page.name.replace(/\s+/g, '').toLowerCase(),
+                name: page.name,
+                profilePicture: page.picture?.data?.url,
+                platform: platform, // return the original requested platform
+                pageId: page.id,
               });
             }
-          } else {
-            this.logger.log(`[SearchUsers] Threads: No connected Instagram account found to perform fallback lookup.`);
           }
         } catch (err: any) {
-          this.logger.warn(`[SearchUsers] Threads Instagram fallback failed for "${query}": ${err?.response?.data?.error?.message || err.message}`);
+          this.logger.warn(`[SearchUsers] Surrogate search failed: ${err?.response?.data?.error?.message || err.message}`);
         }
       } else if (platform === 'x') {
         this.logger.log(`[SearchUsers] X: no search API available for user lookup`);

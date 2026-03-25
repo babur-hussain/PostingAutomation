@@ -358,4 +358,135 @@ export class SocialAccountsController {
 
     return { message: 'Account connected successfully', ...result };
   }
+
+  /**
+   * Search for users/pages on a platform to enable @mention autocomplete.
+   * Uses Instagram Business Discovery and Facebook Page Search where available.
+   */
+  @Get('search-users')
+  @UseGuards(FirebaseAuthGuard)
+  async searchUsers(
+    @CurrentUser() userId: string,
+    @Query('platform') platform: string,
+    @Query('q') query: string,
+  ) {
+    if (!query || query.length < 2) {
+      return { results: [] };
+    }
+
+    try {
+      // Get the user's account + decrypted token for this platform
+      const accountsWithTokens = await this.socialAccountsService.getAccountsForPlatforms(
+        userId,
+        [platform as any],
+      );
+      if (accountsWithTokens.length === 0) {
+        return { results: [] };
+      }
+
+      const { account, decryptedToken } = accountsWithTokens[0];
+      const results: any[] = [];
+
+      if (platform === 'instagram') {
+        // Use Instagram Business Discovery API for exact username lookup
+        try {
+          const response = await (await import('axios')).default.get(
+            `https://graph.facebook.com/v25.0/${account.accountId}`,
+            {
+              params: {
+                fields: `business_discovery.fields(username,name,profile_picture_url,biography,followers_count){username,name,profile_picture_url}`,
+                access_token: decryptedToken,
+              },
+              // Use a partial username query via business_discovery
+            },
+          );
+          // business_discovery requires exact username, so we'll try the query as-is
+          // For a more search-like experience, we query the account's own data
+        } catch {
+          // Business Discovery requires exact username match, silently fail
+        }
+
+        // Try exact username lookup via Business Discovery
+        try {
+          const bdResponse = await (await import('axios')).default.get(
+            `https://graph.facebook.com/v25.0/${account.accountId}`,
+            {
+              params: {
+                fields: `business_discovery.fields(username,name,profile_picture_url).username(${query})`,
+                access_token: decryptedToken,
+              },
+            },
+          );
+          const bd = bdResponse.data?.business_discovery;
+          if (bd) {
+            results.push({
+              username: bd.username,
+              name: bd.name || bd.username,
+              profilePicture: bd.profile_picture_url,
+              platform: 'instagram',
+            });
+          }
+        } catch {
+          // Username not found or not a business account
+        }
+      } else if (platform === 'facebook') {
+        // Facebook Page Search
+        try {
+          const fbResponse = await (await import('axios')).default.get(
+            `https://graph.facebook.com/v25.0/pages/search`,
+            {
+              params: {
+                q: query,
+                fields: 'id,name,picture,username',
+                access_token: decryptedToken,
+                limit: 10,
+              },
+            },
+          );
+          const pages = fbResponse.data?.data || [];
+          for (const page of pages) {
+            results.push({
+              username: page.username || page.name,
+              name: page.name,
+              profilePicture: page.picture?.data?.url,
+              platform: 'facebook',
+              pageId: page.id,
+            });
+          }
+        } catch (err: any) {
+          this.logger.warn(`Facebook page search failed: ${err?.response?.data?.error?.message || err.message}`);
+        }
+      } else if (platform === 'threads') {
+        // Threads doesn't have a search API, but we can use username validation
+        // via the Threads API profile fields
+        try {
+          const threadsResponse = await (await import('axios')).default.get(
+            `https://graph.threads.net/v1.0/${account.accountId}`,
+            {
+              params: {
+                fields: `business_discovery.fields(username,name,threads_profile_picture_url).username(${query})`,
+                access_token: decryptedToken,
+              },
+            },
+          );
+          const bd = threadsResponse.data?.business_discovery;
+          if (bd) {
+            results.push({
+              username: bd.username,
+              name: bd.name || bd.username,
+              profilePicture: bd.threads_profile_picture_url,
+              platform: 'threads',
+            });
+          }
+        } catch {
+          // Username lookup failed
+        }
+      }
+
+      return { results };
+    } catch (error: any) {
+      this.logger.error(`User search failed: ${error.message}`);
+      return { results: [] };
+    }
+  }
 }

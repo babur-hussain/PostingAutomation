@@ -13,6 +13,7 @@ import {
   Logger,
   BadRequestException,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { SocialAccountsService } from './social-accounts.service';
@@ -448,6 +449,67 @@ export class SocialAccountsController {
       return { results };
     } catch (error: any) {
       this.logger.error(`User search failed: ${error.message}`);
+      return { results: [] };
+    }
+  }
+
+  @Get('search-locations')
+  @ApiOperation({ summary: 'Search for locations supported by a specific platform' })
+  async searchLocations(
+    @CurrentUser('userId') userId: string,
+    @Query('platform') platform: string,
+    @Query('q') query: string,
+  ) {
+    if (!query || query.length < 2) return { results: [] };
+
+    try {
+      this.logger.log(`[SearchLocations] Querying locations for platform: ${platform}, q: ${query}, userId: ${userId}`);
+      const axios = (await import('axios')).default;
+      const results: any[] = [];
+
+      if (['instagram', 'threads', 'facebook'].includes(platform)) {
+        // All Meta platforms use Facebook Page IDs representing physical places for their location tags.
+        // We need an EAA (Facebook) token to perform this search via /search?type=place.
+        const fbAccounts = await this.socialAccountsService.getAccountsForPlatforms(userId, ['facebook' as any]);
+        this.logger.log(`[SearchLocations] fbAccounts found for userId ${userId}: ${fbAccounts?.length || 0}`);
+        
+        if (fbAccounts && fbAccounts.length > 0) {
+          const searchToken = fbAccounts[0].decryptedToken;
+          const fbResponse = await axios.get(
+            `https://graph.facebook.com/v25.0/search`,
+            {
+              params: {
+                type: 'place',
+                q: query,
+                fields: 'id,name,location',
+                access_token: searchToken,
+                limit: 15,
+              },
+            },
+          );
+          
+          const pages = fbResponse.data?.data || [];
+          for (const page of pages) {
+            // Only include pages that actually have a physical location associated with them
+            if (page.location) {
+              const address = [page.location.city, page.location.country].filter(Boolean).join(', ');
+              results.push({
+                id: page.id,        // This is the native Meta Place ID required for tagging
+                name: page.name,
+                address: address || '',
+                platform: platform,
+              });
+            }
+          }
+        } else {
+          this.logger.warn(`[SearchLocations] No connected Facebook account found to perform Meta location search.`);
+        }
+      }
+
+      this.logger.log(`[SearchLocations] Found ${results.length} locations for ${platform}`);
+      return { results };
+    } catch (error: any) {
+      this.logger.error(`Location search failed: ${error?.response?.data?.error?.message || error.message}`);
       return { results: [] };
     }
   }

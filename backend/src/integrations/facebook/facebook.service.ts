@@ -23,21 +23,26 @@ export class FacebookService {
 
         let placeId: string | undefined;
         if (location) {
-          try {
-            const searchRes = await axios.get(`${this.apiBase}/search`, {
-              params: {
-                type: 'place',
-                center: `${location.lat},${location.lng}`,
-                distance: 1000,
-                access_token: pageAccessToken,
+          if ((location as any).id) {
+            placeId = (location as any).id;
+            this.logger.log(`Using provided native Meta Place ID: ${placeId}`);
+          } else if (location.lat && location.lng) {
+            try {
+              const searchRes = await axios.get(`${this.apiBase}/search`, {
+                params: {
+                  type: 'place',
+                  center: `${location.lat},${location.lng}`,
+                  distance: 1000,
+                  access_token: pageAccessToken,
+                }
+              });
+              if (searchRes.data?.data && searchRes.data.data.length > 0) {
+                placeId = searchRes.data.data[0].id;
+                this.logger.log(`Mapped unified location ${location.name} to Facebook Place ID ${placeId}`);
               }
-            });
-            if (searchRes.data?.data && searchRes.data.data.length > 0) {
-              placeId = searchRes.data.data[0].id;
-              this.logger.log(`Mapped location ${location.name} to Facebook Place ID ${placeId}`);
+            } catch (err) {
+              this.logger.warn(`Failed to resolve Facebook place ID for location ${location.name}`);
             }
-          } catch (err) {
-            this.logger.warn(`Failed to resolve Facebook place ID for location ${location.name}`);
           }
         }
 

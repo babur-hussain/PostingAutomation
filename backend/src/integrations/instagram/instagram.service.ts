@@ -47,21 +47,26 @@ export class InstagramService {
       let locationId: string | undefined;
       // Get location ID using graph api search similar to Facebook
       if (location) {
-        try {
-          const searchRes = await axios.get(`https://graph.facebook.com/${GRAPH_API_VERSION}/search`, {
-            params: {
-              type: 'place',
-              center: `${location.lat},${location.lng}`,
-              distance: 1000,
-              access_token: accessToken,
+        if ((location as any).id) {
+          locationId = (location as any).id;
+          this.logger.log(`Using provided native Meta Place ID: ${locationId}`);
+        } else if (location.lat && location.lng) {
+          try {
+            const searchRes = await axios.get(`https://graph.facebook.com/${GRAPH_API_VERSION}/search`, {
+              params: {
+                type: 'place',
+                center: `${location.lat},${location.lng}`,
+                distance: 1000,
+                access_token: accessToken,
+              }
+            });
+            if (searchRes.data?.data && searchRes.data.data.length > 0) {
+              locationId = searchRes.data.data[0].id;
+              this.logger.log(`Mapped location ${location.name} to Instagram Location ID ${locationId}`);
             }
-          });
-          if (searchRes.data?.data && searchRes.data.data.length > 0) {
-            locationId = searchRes.data.data[0].id;
-            this.logger.log(`Mapped location ${location.name} to Instagram Location ID ${locationId}`);
+          } catch (err) {
+            this.logger.warn(`Failed to resolve Instagram location_id for ${location.name}`);
           }
-        } catch (err) {
-          this.logger.warn(`Failed to resolve Instagram location_id for ${location.name}`);
         }
       }
 

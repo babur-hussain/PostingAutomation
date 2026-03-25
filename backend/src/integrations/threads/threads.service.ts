@@ -56,8 +56,8 @@ export class ThreadsService {
     };
     // Threads API location tagging typically requires a location_id from Meta's Pages/Places API.
     // If we have a place id mapped to location.name, we would pass it here.
-    if (location && (location as any).locationId) {
-      params.location_id = (location as any).locationId;
+    if (location && ((location as any).id || (location as any).locationId)) {
+      params.location_id = (location as any).id || (location as any).locationId;
     }
 
     const response = await axios.post(`${this.apiBase}/${accountId}/threads`, null, { params });
@@ -77,8 +77,8 @@ export class ThreadsService {
       text,
       access_token: accessToken,
     };
-    if (location && (location as any).locationId) {
-      params.location_id = (location as any).locationId;
+    if (location && ((location as any).id || (location as any).locationId)) {
+      params.location_id = (location as any).id || (location as any).locationId;
     }
 
     const response = await axios.post(`${this.apiBase}/${accountId}/threads`, null, { params });
@@ -98,8 +98,8 @@ export class ThreadsService {
       text,
       access_token: accessToken,
     };
-    if (location && (location as any).locationId) {
-      params.location_id = (location as any).locationId;
+    if (location && ((location as any).id || (location as any).locationId)) {
+      params.location_id = (location as any).id || (location as any).locationId;
     }
 
     const response = await axios.post(`${this.apiBase}/${accountId}/threads`, null, { params });

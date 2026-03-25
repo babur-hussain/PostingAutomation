@@ -244,9 +244,11 @@ export class ThreadsService {
     platformPostId: string,
     text: string
   ): Promise<string> {
+    let creationId: string;
+
+    // Step 1: Create the reply container
     try {
-      this.logger.log(`Replying to thread: ${platformPostId}`);
-      // Create container with reply_to_id
+      this.logger.log(`Creating reply container for thread: ${platformPostId} (account: ${threadsAccountId})`);
       const createResponse = await axios.post(`${this.apiBase}/${threadsAccountId}/threads`, null, {
         params: {
           media_type: 'TEXT',
@@ -255,13 +257,29 @@ export class ThreadsService {
           access_token: accessToken,
         },
       });
-      const creationId = createResponse.data.id;
-      // Publish the container
-      return await this.publishContainer(threadsAccountId, accessToken, creationId);
+      creationId = createResponse.data.id;
+      this.logger.log(`Reply container created: ${creationId}`);
     } catch (error: any) {
       const apiMessage = error?.response?.data?.error?.message || error.message;
-      this.logger.error(`Failed to reply to thread: ${apiMessage}`);
-      throw new BadRequestException(apiMessage || 'Failed to send reply to Threads');
+      const apiCode = error?.response?.data?.error?.code;
+      const apiSubcode = error?.response?.data?.error?.error_subcode;
+      this.logger.error(`Failed to CREATE reply container: ${apiMessage} (code: ${apiCode}, subcode: ${apiSubcode})`);
+      this.logger.error(`Full error response: ${JSON.stringify(error?.response?.data)}`);
+      throw new BadRequestException(apiMessage || 'Failed to create reply container');
+    }
+
+    // Step 2: Publish the container
+    try {
+      this.logger.log(`Publishing reply container: ${creationId}`);
+      const result = await this.publishContainer(threadsAccountId, accessToken, creationId);
+      this.logger.log(`Reply published successfully: ${result}`);
+      return result;
+    } catch (error: any) {
+      const apiMessage = error?.response?.data?.error?.message || error.message;
+      const apiCode = error?.response?.data?.error?.code;
+      this.logger.error(`Failed to PUBLISH reply container: ${apiMessage} (code: ${apiCode})`);
+      this.logger.error(`Full error response: ${JSON.stringify(error?.response?.data)}`);
+      throw new BadRequestException(apiMessage || 'Failed to publish reply');
     }
   }
 
@@ -273,7 +291,7 @@ export class ThreadsService {
       this.logger.log(`${hide ? 'Hiding' : 'Unhiding'} reply: ${replyId}`);
       const response = await axios.post(`${this.apiBase}/${replyId}/manage_reply`, null, {
         params: {
-          hide,
+          hide: hide ? 'true' : 'false',
           access_token: accessToken,
         },
       });
@@ -291,9 +309,8 @@ export class ThreadsService {
     try {
       this.logger.log(`Discovering profile for username: ${targetUsername}`);
       // Based on Threads API, Profile Discovery often looks like searching or accessing standard profile fields.
-      const response = await axios.get(`${this.apiBase}/users`, {
+      const response = await axios.get(`${this.apiBase}/me`, {
         params: {
-          username: targetUsername,
           access_token: accessToken,
           fields: 'id,username,name,threads_profile_picture_url,threads_biography',
         },
@@ -402,6 +419,43 @@ export class ThreadsService {
         `Failed to fetch Threads history: ${error?.response?.data?.error?.message || error.message}`,
       );
       throw error;
+    }
+  }
+
+  /**
+   * Fetch aggregated account analytics by calculating sum of recent post metric insights.
+   */
+  async getAccountAnalytics(accountId: string, accessToken: string): Promise<any> {
+    try {
+      this.logger.log(`Fetching aggregated analytics for Threads account: ${accountId}`);
+      // Fetch latest 20 posts for aggregation
+      const postsResult = await this.getAccountPosts(accountId, accessToken, 20);
+      let totalViews = 0, totalLikes = 0, totalReplies = 0, totalShares = 0;
+
+      // Extract insights from each post successfully avoiding rejection of Promise.all
+      const promises = postsResult.data.map(p =>
+        this.getPostInsights(accountId, accessToken, p.id).catch(() => null)
+      );
+      const insightsList = await Promise.all(promises);
+
+      insightsList.forEach(ins => {
+        if (ins) {
+          totalViews += ins.reach || ins.impressions || ins.views || 0;
+          totalLikes += ins.likes || 0;
+          totalReplies += ins.comments || ins.replies || 0;
+          totalShares += ins.shares || ins.reposts || 0;
+        }
+      });
+
+      return {
+        aggregated_views: totalViews,
+        total_likes: totalLikes,
+        total_replies: totalReplies,
+        total_shares: totalShares,
+      };
+    } catch (err: any) {
+      this.logger.error(`Failed to aggregate Threads insights: ${err?.message}`);
+      return { aggregated_views: 0, total_likes: 0, total_replies: 0, total_shares: 0 };
     }
   }
 }

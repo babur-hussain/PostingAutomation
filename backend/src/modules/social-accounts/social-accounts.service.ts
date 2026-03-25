@@ -583,4 +583,32 @@ export class SocialAccountsService {
     decrypted += decipher.final('utf8');
     return decrypted;
   }
+
+  /**
+   * Get account analytics by platform native provider.
+   */
+  async getAccountAnalytics(userId: string, accountId: string): Promise<any> {
+    const account = await this.socialAccountModel.findOne({
+      userId: new Types.ObjectId(userId),
+      _id: accountId,
+    });
+
+    if (!account) {
+      throw new NotFoundException('Account not found');
+    }
+
+    const decryptedToken = this.decrypt(account.accessToken);
+
+    switch (account.platform) {
+      case SocialPlatform.FACEBOOK:
+        return this.facebookProvider.getPageInsights(decryptedToken, account.accountId);
+      case SocialPlatform.INSTAGRAM:
+        return this.instagramProvider.getUserInsights(account.accountId, decryptedToken);
+      case SocialPlatform.THREADS:
+        return this.threadsProvider.getAccountAnalytics(account.accountId, decryptedToken);
+      default:
+        this.logger.log(`Analytics requested for unsupported platform: ${account.platform}`);
+        return {};
+    }
+  }
 }

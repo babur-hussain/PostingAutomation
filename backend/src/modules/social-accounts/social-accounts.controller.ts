@@ -205,7 +205,7 @@ export class SocialAccountsController {
   async threadsDeleteData(@Body() body: any) {
     this.logger.log(`Received Threads Delete Data Webhook: ${JSON.stringify(body)}`);
     // Parse the signed_request to get user_id and remove their data
-    
+
     // Meta requires returning a JSON object with a url where the user can check the status 
     // and a confirmation code.
     return {
@@ -299,6 +299,18 @@ export class SocialAccountsController {
   @Get()
   async getAccounts(@CurrentUser('userId') userId: string) {
     return this.socialAccountsService.getAccounts(userId);
+  }
+
+  /**
+   * Get analytics for a specific connected social account.
+   */
+  @UseGuards(FirebaseAuthGuard)
+  @Get(':id/analytics')
+  async getAccountAnalytics(
+    @CurrentUser('userId') userId: string,
+    @Param('id') accountId: string,
+  ) {
+    return this.socialAccountsService.getAccountAnalytics(userId, accountId);
   }
 
   /**

@@ -160,4 +160,50 @@ export class FacebookProvider {
       throw error;
     }
   }
+
+  /**
+   * Get basic insights for a Facebook Page.
+   */
+  async getPageInsights(accessToken: string, pageId: string): Promise<any> {
+    const axios = (await import('axios')).default;
+    this.logger.log(`Fetching Facebook insights for page: ${pageId}`);
+    try {
+      // 1. Fetch metrics
+      const response = await axios.get(
+        `https://graph.facebook.com/${GRAPH_API_VERSION}/${pageId}/insights`,
+        {
+          params: {
+            metric: 'page_impressions,page_post_engagements,page_fans',
+            period: 'day',
+            access_token: accessToken,
+          },
+        },
+      ).catch(() => ({ data: { data: [] } }));
+
+      // 2. Fetch basic counts
+      const profileResponse = await axios.get(
+        `https://graph.facebook.com/${GRAPH_API_VERSION}/${pageId}`,
+        {
+          params: {
+            fields: 'followers_count,fan_count',
+            access_token: accessToken,
+          },
+        },
+      ).catch(() => ({ data: {} }));
+
+      const data = response.data?.data || [];
+      const result: any = {
+        followers: profileResponse.data.followers_count || profileResponse.data.fan_count || 0,
+      };
+
+      data.forEach((item: any) => {
+        // Facebook returns an array of values for different days, get the most recent one
+        result[item.name] = item.values[item.values.length - 1]?.value || 0;
+      });
+      return result;
+    } catch (err: any) {
+      this.logger.error(`Failed to fetch FB insights: ${err?.response?.data?.error?.message || err.message}`);
+      return { followers: 0, page_impressions: 0, page_post_engagements: 0, page_fans: 0 };
+    }
+  }
 }

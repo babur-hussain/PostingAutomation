@@ -170,4 +170,51 @@ export class InstagramProvider {
       profilePictureUrl: response.data.profile_picture_url,
     };
   }
+
+  /**
+   * Get basic insights for an Instagram user profile.
+   * Requires instagram_manage_insights permission.
+   */
+  async getUserInsights(igUserId: string, accessToken: string): Promise<any> {
+    const axios = (await import('axios')).default;
+    this.logger.log(`Fetching Instagram insights for user: ${igUserId}`);
+    try {
+      // 1. Fetch metrics
+      const response = await axios.get(
+        `https://graph.instagram.com/v21.0/${igUserId}/insights`,
+        {
+          params: {
+            metric: 'impressions,reach,profile_views',
+            period: 'day',
+            access_token: accessToken,
+          },
+        },
+      ).catch(() => ({ data: { data: [] } }));
+
+      // 2. Fetch basic counts
+      const profileResponse = await axios.get(
+        `https://graph.instagram.com/v21.0/${igUserId}`,
+        {
+          params: {
+            fields: 'followers_count,media_count',
+            access_token: accessToken,
+          },
+        },
+      ).catch(() => ({ data: {} }));
+
+      const data = response.data?.data || [];
+      const result: any = {
+        followers: profileResponse.data.followers_count || 0,
+        total_posts: profileResponse.data.media_count || 0,
+      };
+
+      data.forEach((item: any) => {
+        result[item.name] = item.values[0]?.value || 0;
+      });
+      return result;
+    } catch (err: any) {
+      this.logger.error(`Failed to fetch IG insights: ${err?.response?.data?.error?.message || err.message}`);
+      return { followers: 0, total_posts: 0, impressions: 0, reach: 0, profile_views: 0 };
+    }
+  }
 }

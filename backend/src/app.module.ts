@@ -20,6 +20,7 @@ import { ThreadsModule } from './integrations/threads/threads.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { HealthModule } from './modules/health/health.module';
+import { StaticModule } from './modules/static/static.module';
 
 @Module({
   imports: [

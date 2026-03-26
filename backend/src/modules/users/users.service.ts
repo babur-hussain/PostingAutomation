@@ -4,10 +4,18 @@ import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { User, UserDocument } from './schemas/user.schema';
+import { SocialAccountsService } from '../social-accounts/social-accounts.service';
+import { PostsService } from '../posts/posts.service';
+import { MediaService } from '../media/media.service';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  constructor(
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    private socialAccountsService: SocialAccountsService,
+    private postsService: PostsService,
+    private mediaService: MediaService,
+  ) { }
 
   async create(
     email: string,
@@ -73,5 +81,22 @@ export class UsersService {
     });
 
     return user.save();
+  }
+
+  /**
+   * Delete a user and all their associated data (cascading).
+   */
+  async deleteUser(userId: string): Promise<void> {
+    // 1. Delete social accounts
+    await this.socialAccountsService.deleteByUserId(userId);
+
+    // 2. Delete posts and cancel jobs
+    await this.postsService.deleteByUserId(userId);
+
+    // 3. Delete media and S3 files
+    await this.mediaService.deleteByUserId(userId);
+
+    // 4. Finally delete the user
+    await this.userModel.deleteOne({ _id: new Types.ObjectId(userId) });
   }
 }

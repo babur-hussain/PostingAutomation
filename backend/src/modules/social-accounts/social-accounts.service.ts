@@ -412,6 +412,19 @@ export class SocialAccountsService {
   }
 
   /**
+   * Delete all social accounts for a specific user.
+   * Used during account deletion.
+   */
+  async deleteByUserId(userId: string): Promise<void> {
+    const result = await this.socialAccountModel.deleteMany({
+      userId: new Types.ObjectId(userId),
+    });
+    this.logger.log(
+      `Deleted ${result.deletedCount} social accounts for user ${userId}`,
+    );
+  }
+
+  /**
    * Manually connect an Instagram account using a raw access token.
    * For testing / Meta app review — bypasses the OAuth code exchange flow.
    */
@@ -552,15 +565,20 @@ export class SocialAccountsService {
 
               account.accessToken = this.encrypt(accessToken);
               account.tokenExpiry = new Date(Date.now() + expiresIn * 1000);
-              
+
               await this.socialAccountModel.updateOne(
                 { _id: account._id },
                 { $set: { accessToken: account.accessToken, tokenExpiry: account.tokenExpiry } }
               );
-              
+
               this.logger.log(`Auto-refreshed expired YouTube token for account: ${account.accountName}`);
             } catch (e: any) {
-              this.logger.error(`Failed to auto-refresh YouTube token for ${account.accountName}: ${e.message}`);
+              const errorBody = e?.response?.data
+                ? JSON.stringify(e.response.data)
+                : e.message;
+              this.logger.error(
+                `Failed to auto-refresh YouTube token for ${account.accountName}: ${errorBody}`,
+              );
             }
           } else {
             this.logger.warn(

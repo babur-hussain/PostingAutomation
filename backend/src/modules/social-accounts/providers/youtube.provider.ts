@@ -56,27 +56,36 @@ export class YouTubeProvider {
   }> {
     const axios = (await import('axios')).default;
 
-    const response = await axios.post(
-      'https://oauth2.googleapis.com/token',
-      new URLSearchParams({
-        code,
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        redirect_uri: this.redirectUri,
-        grant_type: 'authorization_code',
-      }).toString(),
-      {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      },
-    );
+    try {
+      const response = await axios.post(
+        'https://oauth2.googleapis.com/token',
+        new URLSearchParams({
+          code,
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+          redirect_uri: this.redirectUri,
+          grant_type: 'authorization_code',
+        }).toString(),
+        {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        },
+      );
 
-    this.logger.log('Successfully exchanged code for YouTube tokens');
+      this.logger.log('Successfully exchanged code for YouTube tokens');
 
-    return {
-      accessToken: response.data.access_token,
-      refreshToken: response.data.refresh_token,
-      expiresIn: response.data.expires_in || 3600,
-    };
+      return {
+        accessToken: response.data.access_token,
+        refreshToken: response.data.refresh_token,
+        expiresIn: response.data.expires_in || 3600,
+      };
+    } catch (error: any) {
+      if (error.response?.data) {
+        this.logger.error(
+          `YouTube Token Exchange Error: ${JSON.stringify(error.response.data)}`,
+        );
+      }
+      throw error;
+    }
   }
 
   /**
@@ -88,23 +97,32 @@ export class YouTubeProvider {
   }> {
     const axios = (await import('axios')).default;
 
-    const response = await axios.post(
-      'https://oauth2.googleapis.com/token',
-      new URLSearchParams({
-        refresh_token: refreshToken,
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        grant_type: 'refresh_token',
-      }).toString(),
-      {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      },
-    );
+    try {
+      const response = await axios.post(
+        'https://oauth2.googleapis.com/token',
+        new URLSearchParams({
+          refresh_token: refreshToken,
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+          grant_type: 'refresh_token',
+        }).toString(),
+        {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        },
+      );
 
-    return {
-      accessToken: response.data.access_token,
-      expiresIn: response.data.expires_in || 3600,
-    };
+      return {
+        accessToken: response.data.access_token,
+        expiresIn: response.data.expires_in || 3600,
+      };
+    } catch (error: any) {
+      if (error.response?.data) {
+        this.logger.error(
+          `YouTube Token Refresh Error: ${JSON.stringify(error.response.data)}`,
+        );
+      }
+      throw error;
+    }
   }
 
   /**

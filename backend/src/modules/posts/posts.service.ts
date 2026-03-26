@@ -140,6 +140,33 @@ export class PostsService {
     await this.postModel.deleteOne({ _id: post._id });
   }
 
+  /**
+   * Delete all posts for a specific user and cancel any pending jobs.
+   * Used during account deletion.
+   */
+  async deleteByUserId(userId: string): Promise<void> {
+    const posts = await this.postModel.find({
+      userId: new Types.ObjectId(userId),
+      status: { $in: [PostStatus.PENDING, PostStatus.PROCESSING] },
+    });
+
+    // Cancel all pending jobs
+    for (const post of posts) {
+      try {
+        await this.postSchedulerService.cancelJob(post._id.toString());
+      } catch (error) {
+        this.logger.warn(
+          `Failed to cancel job for post ${post._id} during user deletion: ${error.message}`,
+        );
+      }
+    }
+
+    const result = await this.postModel.deleteMany({
+      userId: new Types.ObjectId(userId),
+    });
+    this.logger.log(`Deleted ${result.deletedCount} posts for user ${userId}`);
+  }
+
   async getPostAnalytics(userId: string, postId: string) {
     const post = await this.findOne(userId, postId);
 

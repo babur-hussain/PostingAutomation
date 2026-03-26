@@ -50,5 +50,13 @@ export class AuthService {
     await (user as any).save();
     return { notificationPreferences: (user as any).notificationPreferences };
   }
-}
 
+  /**
+   * Delete user account and all associated data.
+   */
+  async deleteAccount(userId: string) {
+    this.logger.log(`Initiating account deletion for user: ${userId}`);
+    await this.usersService.deleteUser(userId);
+    return { success: true, message: 'Account deleted successfully' };
+  }
+}

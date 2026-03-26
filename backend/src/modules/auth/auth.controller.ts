@@ -1,4 +1,4 @@
-import { Controller, UseGuards, Get, Patch, Body } from '@nestjs/common';
+import { Controller, UseGuards, Get, Patch, Body, Delete } from '@nestjs/common';
 import { IsOptional, IsString, MaxLength, IsEmail, IsBoolean } from 'class-validator';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
@@ -46,7 +46,6 @@ export class AuthController {
     return this.authService.updateProfile(userId, body);
   }
 
-  // #49: Sync notification preferences from mobile
   @UseGuards(FirebaseAuthGuard)
   @Patch('notification-preferences')
   async updateNotificationPreferences(
@@ -54,5 +53,18 @@ export class AuthController {
     @Body() body: UpdateNotificationPreferencesDto,
   ) {
     return this.authService.updateNotificationPreferences(userId, body);
+  }
+
+  @UseGuards(FirebaseAuthGuard)
+  @Get('account') // Temporary alias for profile/account info if needed
+  async getAccount(@CurrentUser('userId') userId: string) {
+    return this.authService.getProfile(userId);
+  }
+
+  @UseGuards(FirebaseAuthGuard)
+  @Throttle({ default: { ttl: 60000, limit: 1 } }) // Extremely strict for deletion
+  @Delete('account')
+  async deleteAccount(@CurrentUser('userId') userId: string) {
+    return this.authService.deleteAccount(userId);
   }
 }

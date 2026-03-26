@@ -196,4 +196,44 @@ export class MediaService {
       await this.mediaModel.deleteOne({ _id: mediaId });
     }
   }
+
+  /**
+   * Delete all media for a specific user.
+   * Used during account deletion.
+   */
+  async deleteByUserId(userId: string): Promise<void> {
+    const medias = await this.mediaModel.find({
+      userId: new Types.ObjectId(userId),
+    });
+
+    for (const media of medias) {
+      try {
+        if (media.s3Key.startsWith('local/')) {
+          const filename = media.s3Key.replace('local/', '');
+          const localPath = path.join(this.uploadsDir, filename);
+          if (fs.existsSync(localPath)) {
+            fs.unlinkSync(localPath);
+          }
+        } else {
+          await this.s3Client.send(
+            new DeleteObjectCommand({
+              Bucket: this.bucketName,
+              Key: media.s3Key,
+            }),
+          );
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to delete media file ${media.s3Key} for user ${userId}: ${error.message}`,
+        );
+      }
+    }
+
+    const result = await this.mediaModel.deleteMany({
+      userId: new Types.ObjectId(userId),
+    });
+    this.logger.log(
+      `Deleted ${result.deletedCount} media records for user ${userId}`,
+    );
+  }
 }

@@ -185,6 +185,16 @@ export class InstagramProvider {
     const axios = (await import('axios')).default;
     this.logger.log(`Fetching Instagram insights for user: ${igUserId}`);
 
+    // Instagram Login tokens (IG*) require 'me' instead of numeric user ID in URL paths.
+    // Facebook Login tokens (EAA*) can use the numeric IG Business Account ID directly.
+    const isNativeToken = accessToken?.startsWith('IG');
+    const apiBase = isNativeToken
+      ? 'https://graph.instagram.com/v21.0'
+      : 'https://graph.facebook.com/v21.0';
+    const targetUserId = isNativeToken ? 'me' : igUserId;
+
+    this.logger.log(`IG Insights: isNativeToken=${isNativeToken}, apiBase=${apiBase}, targetUserId=${targetUserId}`);
+
     // Helper: fetch a batch of metrics safely
     const fetchMetricBatch = async (metrics: string[], period = 'day'): Promise<any[]> => {
       try {
@@ -192,7 +202,7 @@ export class InstagramProvider {
         const oneDayAgo = now - (86400 * 2); // 2 days back to ensure data exists
 
         const response = await axios.get(
-          `https://graph.instagram.com/v21.0/${igUserId}/insights`,
+          `${apiBase}/${targetUserId}/insights`,
           {
             params: {
               metric: metrics.join(','),
@@ -214,7 +224,7 @@ export class InstagramProvider {
     try {
       // ── 1. Profile metadata (always works) ──
       const profileResponse = await axios.get(
-        `https://graph.instagram.com/v21.0/${igUserId}`,
+        `${apiBase}/${targetUserId}`,
         {
           params: {
             fields: 'user_id,username,name,profile_picture_url,followers_count,follows_count,media_count,biography,website',

@@ -1,15 +1,13 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TwitterApi } from 'twitter-api-v2';
+import Redis from 'ioredis';
 
 @Injectable()
 export class XProvider {
   private readonly logger = new Logger(XProvider.name);
   private client: TwitterApi;
-
-  // In-memory store for OAuth 1.0a secrets mapped by oauth_token
-  // A Redis cache is recommended for production scale, but this works fine for a single instance
-  private oauthStore = new Map<string, { secret: string; userId: string }>();
+  private redis: Redis;
 
   constructor(private configService: ConfigService) {
     const appKey = this.configService.get<string>('x.consumerKey');
@@ -18,6 +16,13 @@ export class XProvider {
     this.client = new TwitterApi({
       appKey: appKey || '',
       appSecret: appSecret || '',
+    });
+
+    this.redis = new Redis({
+      host: this.configService.get<string>('redis.host') || 'localhost',
+      port: this.configService.get<number>('redis.port') || 6379,
+      password: this.configService.get<string>('redis.password') || undefined,
+      tls: this.configService.get<boolean>('redis.tls') ? {} : undefined,
     });
 
     this.logger.log('X (Twitter) Provider initialized for OAuth 1.0a');
@@ -32,16 +37,13 @@ export class XProvider {
 
       const authLink = await this.client.generateAuthLink(callbackUrl, { linkMode: 'authorize' });
 
-      // Store the oauth_token_secret mapped to the oauth_token
-      this.oauthStore.set(authLink.oauth_token, {
-        secret: authLink.oauth_token_secret,
-        userId,
-      });
-
-      // Optional: Clean up old entries after 15 minutes (OAuth tokens expire anyway)
-      setTimeout(() => {
-        this.oauthStore.delete(authLink.oauth_token);
-      }, 15 * 60 * 1000);
+      // Store the oauth_token_secret mapped to the oauth_token in Redis with an expiry of 15 minutes (900s)
+      await this.redis.set(
+        `x_oauth:${authLink.oauth_token}`,
+        JSON.stringify({ secret: authLink.oauth_token_secret, userId }),
+        'EX',
+        900
+      );
 
       this.logger.log(`Generated X authorization URL for user: ${userId}`);
       return authLink.url;
@@ -65,12 +67,14 @@ export class XProvider {
     accessToken: string;
     accessSecret: string;
   }> {
-    const sessionData = this.oauthStore.get(oauthToken);
+    const sessionDataStr = await this.redis.get(`x_oauth:${oauthToken}`);
 
-    if (!sessionData) {
+    if (!sessionDataStr) {
       this.logger.warn(`No session found for oauth_token: ${oauthToken}`);
       throw new BadRequestException('OAuth session expired or invalid. Please try connecting again.');
     }
+
+    const sessionData = JSON.parse(sessionDataStr);
 
     try {
       // 1. Create a client from the temporary token & secret
@@ -88,7 +92,7 @@ export class XProvider {
       this.logger.log(`Successfully completed OAuth flow for X user: ${screenName}`);
 
       // We no longer need the temporary secret
-      this.oauthStore.delete(oauthToken);
+      await this.redis.del(`x_oauth:${oauthToken}`);
 
       return {
         userId: sessionData.userId,

@@ -8,7 +8,8 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger } from '@nestjs/common';
+import { Logger, Injectable } from '@nestjs/common';
+import { FirebaseService } from '../auth/firebase.service';
 
 @WebSocketGateway({
   cors: {
@@ -21,8 +22,24 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   private readonly logger = new Logger(MessagesGateway.name);
 
-  handleConnection(client: Socket) {
-    this.logger.log(`Client connected: ${client.id}`);
+  constructor(private firebaseService: FirebaseService) {}
+
+  async handleConnection(client: Socket) {
+    const token = client.handshake.auth?.token;
+    if (!token) {
+      this.logger.warn(`Client ${client.id} missing auth token. Disconnecting.`);
+      client.disconnect();
+      return;
+    }
+
+    try {
+      const auth = this.firebaseService.getAuth();
+      await auth.verifyIdToken(token);
+      this.logger.log(`Client authenticated & connected: ${client.id}`);
+    } catch (err) {
+      this.logger.warn(`Invalid WebSocket auth token. Disconnecting client ${client.id}`);
+      client.disconnect();
+    }
   }
 
   handleDisconnect(client: Socket) {

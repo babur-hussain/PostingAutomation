@@ -54,8 +54,8 @@ export class Post {
   @Prop({ default: '' })
   caption: string;
 
-  @Prop({ default: null })
-  mediaUrl: string;
+  @Prop({ type: [String], default: [] })
+  mediaUrls: string[];
 
   @Prop({ default: null })
   thumbnailUrl: string;

@@ -13,6 +13,7 @@ import {
   Logger,
   BadRequestException,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -50,6 +51,7 @@ export class SocialAccountsController {
    * This is called by Meta's servers after the user authorizes.
    * No auth guard needed — the user identity comes from the state param.
    */
+  @SkipThrottle()
   @Get('meta/callback')
   async callback(
     @Query('code') code: string,
@@ -89,6 +91,7 @@ export class SocialAccountsController {
    * Facebook OAuth callback.
    * Completely decoupled from the instagram flow.
    */
+  @SkipThrottle()
   @Get('facebook/callback')
   async facebookCallback(
     @Query('code') code: string,
@@ -124,6 +127,7 @@ export class SocialAccountsController {
    * Threads OAuth callback.
    * Completely decoupled from the meta flow.
    */
+  @SkipThrottle()
   @Get('threads/callback')
   async threadsCallback(
     @Query('code') code: string,
@@ -159,6 +163,7 @@ export class SocialAccountsController {
    * Threads Uninstall Callback URL.
    * Called by Meta when a user uninstalls the app or removes permissions.
    */
+  @SkipThrottle()
   @Post('threads/deauthorize')
   @HttpCode(HttpStatus.OK)
   async threadsDeauthorize(@Body() body: any) {
@@ -201,6 +206,7 @@ export class SocialAccountsController {
    * Threads Delete Callback URL.
    * Called by Meta when a user requests their data be deleted.
    */
+  @SkipThrottle()
   @Post('threads/delete-data')
   @HttpCode(HttpStatus.OK)
   async threadsDeleteData(@Body() body: any) {
@@ -219,6 +225,7 @@ export class SocialAccountsController {
    * YouTube OAuth callback.
    * This is called by Google's servers after the user authorizes.
    */
+  @SkipThrottle()
   @Get('youtube/callback')
   async youtubeCallback(
     @Query('code') code: string,
@@ -256,6 +263,7 @@ export class SocialAccountsController {
    * X (Twitter) OAuth callback.
    * This is called by X's servers after the user authorizes via OAuth 1.0a.
    */
+  @SkipThrottle()
   @Get('x/callback')
   async xCallback(
     @Query('oauth_token') oauthToken: string,
@@ -454,6 +462,7 @@ export class SocialAccountsController {
   }
 
   @Get('search-locations')
+  @UseGuards(FirebaseAuthGuard)
   @ApiOperation({ summary: 'Search for locations supported by a specific platform' })
   async searchLocations(
     @CurrentUser('userId') userId: string,

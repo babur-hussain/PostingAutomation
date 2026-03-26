@@ -13,29 +13,30 @@ async function bootstrap() {
     bodyParser: true,
   });
 
-  // Increase body parser limits for media uploads
-  // NestJS built-in body parser handles this via the rawBody option and express settings
+  // Default body parser limited to 1MB for normal routes (protects against payload DoS).
+  // Media uploads are handled separately by Multer with its own 100MB limit.
   const expressApp = app.getHttpAdapter().getInstance();
   const express = require('express');
-  expressApp.use(express.json({ limit: '100mb' }));
-  expressApp.use(express.urlencoded({ limit: '100mb', extended: true }));
+  expressApp.use(express.json({ limit: '1mb' }));
+  expressApp.use(express.urlencoded({ limit: '1mb', extended: true }));
 
   const configService = app.get(ConfigService);
 
   // Security
   app.use(helmet());
 
-  // CORS — only allow localhost in non-production
-  const allowedOrigins: string[] = [
-    configService.get<string>('frontendUrl'),
-  ].filter(Boolean) as string[];
+  // Enable graceful shutdown hooks so BullMQ jobs can finish cleanly
+  app.enableShutdownHooks();
+
+  // CORS — mobile apps typically don't need CORS, but allow dev origins in non-production
+  const allowedOrigins: string[] = [];
 
   if (configService.get<string>('nodeEnv') !== 'production') {
-    allowedOrigins.push('http://localhost:8081', 'http://localhost:19006');
+    allowedOrigins.push('http://localhost:8081', 'http://localhost:19006', 'http://localhost:3000');
   }
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: allowedOrigins.length > 0 ? allowedOrigins : false,
     credentials: true,
   });
 
@@ -53,7 +54,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new TransformInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // Swagger API documentation
+  // Swagger API documentation (development only)
   if (configService.get<string>('nodeEnv') !== 'production') {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('PostingAutomation API')

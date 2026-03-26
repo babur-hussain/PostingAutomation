@@ -45,7 +45,7 @@ export class PostsService {
     const post = new this.postModel({
       userId: new Types.ObjectId(userId),
       caption: dto.caption || '',
-      mediaUrl: dto.mediaUrls && dto.mediaUrls.length > 0 ? dto.mediaUrls[0] : null,
+      mediaUrls: dto.mediaUrls || [],
       thumbnailUrl: dto.thumbnailUrl || null,
       platforms: dto.platforms,
       scheduledTime: dto.scheduledTime ? new Date(dto.scheduledTime) : null,

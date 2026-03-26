@@ -29,14 +29,19 @@ export class YouTubeService {
     try {
       this.logger.log(`Starting YouTube upload. Title: "${title}"`);
 
-      // 1. Download the video from S3
+      // 1. Download the video from S3 as a stream to avoid memory exhaustion
       const videoResponse = await axios.get(videoUrl, {
-        responseType: 'arraybuffer',
+        responseType: 'stream',
       });
-      const videoBuffer = Buffer.from(videoResponse.data);
-      const contentLength = videoBuffer.length;
+      
+      const contentLength = videoResponse.headers['content-length'];
+      const videoStream = videoResponse.data;
 
-      this.logger.log(`Downloaded video: ${contentLength} bytes`);
+      if (!contentLength) {
+        throw new Error('Could not determine video file size from S3 URL');
+      }
+
+      this.logger.log(`Starting video stream download: ${contentLength} bytes`);
 
       const metadata: any = {
         snippet: {
@@ -86,8 +91,8 @@ export class YouTubeService {
 
       this.logger.log('Got resumable upload URL, uploading video data...');
 
-      // 3. Upload video data
-      const uploadResponse = await axios.put(uploadUrl, videoBuffer, {
+      // 3. Upload video data via stream
+      const uploadResponse = await axios.put(uploadUrl, videoStream, {
         headers: {
           'Content-Length': contentLength.toString(),
           'Content-Type': 'video/*',

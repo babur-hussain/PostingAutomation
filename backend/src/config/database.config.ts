@@ -8,5 +8,9 @@ export const databaseConfig: MongooseModuleAsyncOptions = {
     uri: configService.get<string>('database.uri'),
     retryAttempts: 3,
     retryDelay: 1000,
+    maxPoolSize: 20,
+    minPoolSize: 5,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
   }),
 };

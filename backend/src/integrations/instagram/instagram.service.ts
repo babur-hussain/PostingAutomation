@@ -181,18 +181,12 @@ export class InstagramService {
       // Try with Bearer header first, fallback to query param
       let response: any;
       try {
-        if (isNativeToken) {
-          response = await axios.get(`${apiBase}/${containerId}`, {
-            params: { fields: 'status_code', access_token: accessToken },
-            headers,
-          });
-        } else {
-          response = await axios.get(`${apiBase}/${containerId}`, {
-            params: { fields: 'status_code' },
-            headers,
-          });
-        }
+        // Always pass access_token as query parameter for consistent auth
+        response = await axios.get(`${apiBase}/${containerId}`, {
+          params: { fields: 'status_code', access_token: accessToken },
+        });
       } catch {
+        // Retry the same request on transient failures
         response = await axios.get(`${apiBase}/${containerId}`, {
           params: { fields: 'status_code', access_token: accessToken },
         });
@@ -364,7 +358,7 @@ export class InstagramService {
         },
       });
 
-      this.logger.warn(`RAW INSTAGRAM API RESPONSE: ${JSON.stringify(response.data)}`);
+      this.logger.log(`Fetched ${response.data.data?.length || 0} media items for Instagram Account: ${igAccountId}`);
 
       const data = response.data.data.map((item: any) => ({
         id: item.id,

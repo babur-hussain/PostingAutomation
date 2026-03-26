@@ -18,7 +18,7 @@ import { YouTubeService } from '../../../integrations/youtube/youtube.service';
 import { XService } from '../../../integrations/x/x.service';
 import { ThreadsService } from '../../../integrations/threads/threads.service';
 
-@Processor('posts', { concurrency: 5 })
+@Processor('posts', { concurrency: 3 })
 export class QueueWorker extends WorkerHost {
   private readonly logger = new Logger(QueueWorker.name);
 
@@ -100,10 +100,11 @@ export class QueueWorker extends WorkerHost {
             (account.platform as unknown as PostPlatform) ===
             PostPlatform.INSTAGRAM
           ) {
+            const igMediaUrl = post.mediaUrls && post.mediaUrls.length > 0 ? post.mediaUrls[0] : null;
             platformId = await this.instagramService.publishInstagramPost(
               account.accountId,
               decryptedToken,
-              post.mediaUrl,
+              igMediaUrl || '',
               buildCaption('instagram', post.caption),
               getLocation('instagram'),
             );
@@ -112,11 +113,12 @@ export class QueueWorker extends WorkerHost {
             (account.platform as unknown as PostPlatform) ===
             PostPlatform.FACEBOOK
           ) {
+            const fbMediaUrl = post.mediaUrls && post.mediaUrls.length > 0 ? post.mediaUrls[0] : null;
             platformId = await this.facebookService.publishFacebookPost(
               account.accountId,
               decryptedToken,
               buildCaption('facebook', post.caption),
-              post.mediaUrl,
+              fbMediaUrl || '',
               getLocation('facebook'),
             );
             success = true;
@@ -125,14 +127,15 @@ export class QueueWorker extends WorkerHost {
             PostPlatform.YOUTUBE
           ) {
             // Only publish if there is a mediaUrl (video)
-            if (post.mediaUrl) {
+            const ytMediaUrl = post.mediaUrls && post.mediaUrls.length > 0 ? post.mediaUrls[0] : null;
+            if (ytMediaUrl) {
               const ytCaption = buildCaption('youtube', post.caption);
               const youtubeTitle = ytCaption
                 ? ytCaption.substring(0, 100)
                 : 'Untitled Video';
               platformId = await this.youtubeService.publishYouTubeVideo(
                 decryptedToken,
-                post.mediaUrl,
+                ytMediaUrl,
                 youtubeTitle,
                 ytCaption, // full caption as description
                 getLocation('youtube'),
@@ -152,13 +155,14 @@ export class QueueWorker extends WorkerHost {
               throw new Error('X API Consumer Key and Secret are not configured.');
             }
 
+            const xMediaUrl = post.mediaUrls && post.mediaUrls.length > 0 ? post.mediaUrls[0] : null;
             platformId = await this.xService.publishTweet(
               appKey,
               appSecret,
               decryptedToken,
               accountItem.decryptedSecret || '',
               buildCaption('x', post.caption),
-              post.mediaUrl,
+              xMediaUrl || '',
               getLocation('x'),
             );
             success = true;
@@ -166,11 +170,12 @@ export class QueueWorker extends WorkerHost {
             (account.platform as unknown as PostPlatform) ===
             PostPlatform.THREADS
           ) {
+            const thMediaUrl = post.mediaUrls && post.mediaUrls.length > 0 ? post.mediaUrls[0] : null;
             platformId = await this.threadsService.publishThreadsPost(
               account.accountId,
               decryptedToken,
               buildCaption('threads', post.caption),
-              post.mediaUrl,
+              thMediaUrl || '',
               getLocation('threads'),
             );
             success = true;

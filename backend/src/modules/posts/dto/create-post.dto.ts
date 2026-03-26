@@ -9,6 +9,7 @@ import {
   IsNumber,
   ArrayMaxSize,
   ArrayUnique,
+  Allow,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PostPlatform } from '../schemas/post.schema';
@@ -56,6 +57,7 @@ export class CreatePostDto {
   location?: LocationDto;
 
   @IsOptional()
+  @Allow()
   platformConfig?: Record<string, {
     mentions?: string[];
     hashtags?: string[];

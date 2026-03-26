@@ -74,7 +74,10 @@ export class SocialAccountsService {
       .createHmac('sha256', this.encryptionKey)
       .update(data)
       .digest('base64url');
-    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expected);
+    // timingSafeEqual requires equal-length buffers; different lengths = invalid signature
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
       throw new BadRequestException('Invalid OAuth state signature — possible CSRF attack');
     }
     return JSON.parse(Buffer.from(data, 'base64url').toString());
@@ -324,7 +327,7 @@ export class SocialAccountsService {
         },
         {
           accessToken: encryptedToken,
-          tokenExpiry: new Date(Date.now() + expiresIn * 1000),
+          tokenExpiry: null, // Page tokens from short-to-long flow do not expire as long as user manages the page
           accountName: page.name,
           profilePicture: page.picture || null,
         },
@@ -538,26 +541,47 @@ export class SocialAccountsService {
       platform: { $in: platforms },
     });
 
-    return accounts.map((account) => {
-      // #31: Warn about expired tokens
-      if (account.tokenExpiry && new Date(account.tokenExpiry) < new Date()) {
-        this.logger.warn(
-          `Token for ${account.platform} account "${account.accountName}" (${account.accountId}) has expired. ` +
-          `Expired at: ${account.tokenExpiry.toISOString()}. Publishing may fail.`,
-        );
-      }
+    return Promise.all(
+      accounts.map(async (account) => {
+        // #31: Warn about expired tokens, try auto-refreshing if supported
+        if (account.tokenExpiry && new Date(account.tokenExpiry) < new Date()) {
+          if (account.platform === SocialPlatform.YOUTUBE && account.refreshToken) {
+            try {
+              const decRefresh = this.decrypt(account.refreshToken);
+              const { accessToken, expiresIn } = await this.youtubeProvider.refreshAccessToken(decRefresh);
 
-      const result: any = {
-        account,
-        decryptedToken: this.decrypt(account.accessToken),
-      };
+              account.accessToken = this.encrypt(accessToken);
+              account.tokenExpiry = new Date(Date.now() + expiresIn * 1000);
+              
+              await this.socialAccountModel.updateOne(
+                { _id: account._id },
+                { $set: { accessToken: account.accessToken, tokenExpiry: account.tokenExpiry } }
+              );
+              
+              this.logger.log(`Auto-refreshed expired YouTube token for account: ${account.accountName}`);
+            } catch (e: any) {
+              this.logger.error(`Failed to auto-refresh YouTube token for ${account.accountName}: ${e.message}`);
+            }
+          } else {
+            this.logger.warn(
+              `Token for ${account.platform} account "${account.accountName}" (${account.accountId}) has expired. ` +
+              `Expired at: ${account.tokenExpiry.toISOString()}. Publishing may fail.`,
+            );
+          }
+        }
 
-      if (account.refreshToken) {
-        result.decryptedSecret = this.decrypt(account.refreshToken);
-      }
+        const result: any = {
+          account,
+          decryptedToken: this.decrypt(account.accessToken),
+        };
 
-      return result;
-    });
+        if (account.refreshToken) {
+          result.decryptedSecret = this.decrypt(account.refreshToken);
+        }
+
+        return result;
+      })
+    );
   }
 
   private encrypt(text: string): string {

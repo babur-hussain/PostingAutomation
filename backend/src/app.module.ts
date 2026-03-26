@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { APP_GUARD } from '@nestjs/core';
 import { join } from 'path';
 
 import configuration from './config/configuration';
@@ -18,6 +19,7 @@ import { LocationsModule } from './modules/locations/locations.module';
 import { ThreadsModule } from './integrations/threads/threads.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -47,6 +49,14 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module';
     ThreadsModule,
     MessagesModule,
     WebhooksModule,
+    HealthModule,
+  ],
+  providers: [
+    // Apply rate limiting globally (60 req/min default, overridable per-route)
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule { }

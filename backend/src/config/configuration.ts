@@ -26,9 +26,10 @@ export default () => ({
   },
 
   redis: {
-    host: process.env.REDIS_HOST || 'localhost',
+    host: process.env.UPSTASH_REDIS_REST_URL?.replace('https://', '') || process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
-    password: process.env.REDIS_PASSWORD || undefined,
+    password: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.REDIS_PASSWORD || undefined,
+    tls: !!process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_TLS === 'true',
   },
 
   meta: {

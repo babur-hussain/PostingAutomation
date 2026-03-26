@@ -37,11 +37,8 @@ export class PostsController {
     return this.postsService.findAll(userId, pagination.page, pagination.limit);
   }
 
-  @Get(':id')
-  findOne(@CurrentUser('userId') userId: string, @Param('id', ParseObjectIdPipe) id: string) {
-    return this.postsService.findOne(userId, id);
-  }
-
+  // Static 'platform' routes MUST come BEFORE the parameterized ':id' routes
+  // to prevent NestJS from matching 'platform' as a post ID.
   @Get('platform/:accountId')
   getPlatformPosts(
     @CurrentUser('userId') userId: string,
@@ -59,6 +56,12 @@ export class PostsController {
     @Param('platformPostId') platformPostId: string,
   ) {
     return this.postsService.getPlatformPostAnalytics(userId, accountId, platformPostId);
+  }
+
+  // Parameterized ':id' routes come AFTER static routes
+  @Get(':id')
+  findOne(@CurrentUser('userId') userId: string, @Param('id', ParseObjectIdPipe) id: string) {
+    return this.postsService.findOne(userId, id);
   }
 
   @Get(':id/analytics')

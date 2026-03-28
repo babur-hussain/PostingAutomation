@@ -648,6 +648,8 @@ export class SocialAccountsService {
         return this.instagramProvider.getUserInsights(account.accountId, decryptedToken);
       case SocialPlatform.THREADS:
         return this.threadsProvider.getAccountAnalytics(account.accountId, decryptedToken);
+      case SocialPlatform.YOUTUBE:
+        return this.youtubeProvider.getAccountAnalytics(account.accountId, decryptedToken);
       default:
         this.logger.log(`Analytics requested for unsupported platform: ${account.platform}`);
         return {};

@@ -33,7 +33,7 @@ export class YouTubeService {
       const videoResponse = await axios.get(videoUrl, {
         responseType: 'stream',
       });
-      
+
       const contentLength = videoResponse.headers['content-length'];
       const videoStream = videoResponse.data;
 
@@ -115,6 +115,115 @@ export class YouTubeService {
         throw new Error(`YouTube API Error: ${googleError}`);
       }
       throw error;
+    }
+  }
+
+  /**
+   * Fetch advanced insights for a specific published YouTube video
+   */
+  async getPostInsights(
+    accountId: string,
+    accessToken: string,
+    videoId: string,
+  ): Promise<{
+    likes: number;
+    comments: number;
+    shares: number;
+    reach: number;
+    impressions: number;
+    views: number;
+  } | null> {
+    try {
+      const response = await axios.get(
+        'https://www.googleapis.com/youtube/v3/videos',
+        {
+          params: {
+            part: 'statistics',
+            id: videoId,
+          },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+
+      const video = response.data.items?.[0];
+      if (!video || !video.statistics) {
+        this.logger.warn(`No YouTube stats found for video ${videoId}`);
+        return null;
+      }
+
+      const stats = video.statistics;
+
+      return {
+        likes: Number(stats.likeCount || 0),
+        comments: Number(stats.commentCount || 0),
+        shares: 0, // YouTube Data API v3 doesn't return share count easily on video entity
+        reach: Number(stats.viewCount || 0), // Views can approximate reach
+        impressions: Number(stats.viewCount || 0), // Views can approximate impressions
+        views: Number(stats.viewCount || 0),
+      };
+    } catch (error: any) {
+      if (error.response?.data) {
+        this.logger.error(
+          `YouTube Video Analytics Error for ${videoId}: ${JSON.stringify(error.response.data)}`,
+        );
+      } else {
+        this.logger.error(`YouTube Video Analytics Error: ${error.message}`);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Fetch published videos (posts) for a channel
+   */
+  async getAccountPosts(
+    channelId: string,
+    accessToken: string,
+    limit: number = 10,
+    pageToken?: string,
+  ) {
+    try {
+      const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+        params: {
+          part: 'snippet',
+          channelId: channelId,
+          type: 'video',
+          order: 'date',
+          maxResults: limit,
+          pageToken: pageToken,
+        },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      const data = response.data;
+      const posts = data.items.map((item: any) => ({
+        id: item.id.videoId,
+        text: item.snippet.title,
+        mediaUrl: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url,
+        mediaType: 'VIDEO',
+        thumbnailUrl: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url,
+        createdAt: item.snippet.publishedAt,
+        permalink: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+      }));
+
+      return {
+        data: posts,
+        paging: {
+          hasNext: !!data.nextPageToken,
+          nextCursor: data.nextPageToken,
+        },
+      };
+    } catch (error: any) {
+      if (error.response?.data) {
+        this.logger.error(`YouTube getAccountPosts Error: ${JSON.stringify(error.response.data)}`);
+      } else {
+        this.logger.error(`YouTube getAccountPosts Error: ${error.message}`);
+      }
+      return { data: [], paging: { hasNext: false } };
     }
   }
 }

@@ -159,4 +159,47 @@ export class YouTubeProvider {
       thumbnailUrl: channel.snippet.thumbnails?.default?.url,
     };
   }
+
+  /**
+   * Get channel analytics (subscribers, total views, videos)
+   */
+  async getAccountAnalytics(accountId: string, accessToken: string): Promise<any> {
+    const axios = (await import('axios')).default;
+
+    try {
+      const response = await axios.get(
+        'https://www.googleapis.com/youtube/v3/channels',
+        {
+          params: {
+            part: 'statistics',
+            id: accountId, // Since we passed the channel ID as accountId during connection
+          },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+
+      const channel = response.data.items?.[0];
+      if (!channel || !channel.statistics) {
+        return null; // No stats found
+      }
+
+      return {
+        subscribers: Number(channel.statistics.subscriberCount || 0),
+        totalViews: Number(channel.statistics.viewCount || 0),
+        totalVideos: Number(channel.statistics.videoCount || 0),
+        hiddenSubscriberCount: channel.statistics.hiddenSubscriberCount,
+      };
+    } catch (error: any) {
+      if (error.response?.data) {
+        this.logger.error(
+          `YouTube Channel Analytics Error: ${JSON.stringify(error.response.data)}`,
+        );
+      } else {
+        this.logger.error(`YouTube Channel Analytics Error: ${error.message}`);
+      }
+      return null; // Return null gracefully so the UI doesn't crash
+    }
+  }
 }

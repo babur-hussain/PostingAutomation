@@ -14,6 +14,7 @@ import { SocialPlatform } from '../social-accounts/schemas/social-account.schema
 import { FacebookService } from '../../integrations/facebook/facebook.service';
 import { InstagramService } from '../../integrations/instagram/instagram.service';
 import { ThreadsService } from '../../integrations/threads/threads.service';
+import { YouTubeService } from '../../integrations/youtube/youtube.service';
 
 @Injectable()
 export class PostsService {
@@ -26,6 +27,7 @@ export class PostsService {
     private facebookService: FacebookService,
     private instagramService: InstagramService,
     private threadsService: ThreadsService,
+    private youtubeService: YouTubeService,
   ) { }
 
   async create(userId: string, dto: CreatePostDto): Promise<PostDocument> {
@@ -392,6 +394,12 @@ export class PostsService {
         accountItem.decryptedToken,
         platformPostId,
       );
+    } else if (platform === PostPlatform.YOUTUBE) {
+      return this.youtubeService.getPostInsights(
+        accountItem.account.accountId,
+        accountItem.decryptedToken,
+        platformPostId,
+      );
     }
     return null;
   }
@@ -406,6 +414,7 @@ export class PostsService {
       SocialPlatform.FACEBOOK,
       SocialPlatform.INSTAGRAM,
       SocialPlatform.THREADS,
+      SocialPlatform.YOUTUBE,
     ]);
 
     const targetAccount = allTokens.find(a => a.account._id.toString() === accountId);
@@ -417,7 +426,6 @@ export class PostsService {
     const decryptedToken = targetAccount.decryptedToken;
     const platformAccountId = targetAccount.account.accountId;
 
-    // We can confidently assert these are supported due to the platforms array above
     if (platform === SocialPlatform.FACEBOOK) {
       const fbService = this.facebookService as any;
       return fbService.getAccountPosts(platformAccountId, decryptedToken, limit, cursor);
@@ -427,6 +435,8 @@ export class PostsService {
     } else if (platform === SocialPlatform.THREADS) {
       const thService = this.threadsService as any;
       return thService.getAccountPosts(platformAccountId, decryptedToken, limit, cursor);
+    } else if (platform === SocialPlatform.YOUTUBE) {
+      return this.youtubeService.getAccountPosts(platformAccountId, decryptedToken, limit, cursor);
     }
 
     throw new BadRequestException('Platform history not supported');
@@ -437,6 +447,7 @@ export class PostsService {
       SocialPlatform.FACEBOOK,
       SocialPlatform.INSTAGRAM,
       SocialPlatform.THREADS,
+      SocialPlatform.YOUTUBE,
     ]);
 
     const targetAccount = allTokens.find(a => a.account._id.toString() === accountId);

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
 import { MulterModule } from '@nestjs/platform-express';
@@ -9,8 +9,8 @@ import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
 @Module({
   imports: [
-    AuthModule,
-    UsersModule,
+    forwardRef(() => AuthModule),
+    forwardRef(() => UsersModule),
     ConfigModule,
     MongooseModule.forFeature([{ name: Media.name, schema: MediaSchema }]),
     MulterModule.register({
@@ -22,4 +22,4 @@ import { UsersModule } from '../users/users.module';
   providers: [MediaService],
   exports: [MediaService],
 })
-export class MediaModule {}
+export class MediaModule { }

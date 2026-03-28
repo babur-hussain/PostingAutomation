@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PostsService } from './posts.service';
 import { PostsController } from './posts.controller';
@@ -12,17 +12,18 @@ import { InstagramService } from '../../integrations/instagram/instagram.service
 import { ThreadsService } from '../../integrations/threads/threads.service';
 import { InstagramController } from '../../integrations/instagram/instagram.controller';
 import { FacebookController } from '../../integrations/facebook/facebook.controller';
+import { YouTubeService } from '../../integrations/youtube/youtube.service';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Post.name, schema: PostSchema }]),
     SchedulerModule,
-    AuthModule,
-    UsersModule,
-    SocialAccountsModule,
+    forwardRef(() => AuthModule),
+    forwardRef(() => UsersModule),
+    forwardRef(() => SocialAccountsModule),
   ],
   controllers: [PostsController, InstagramController, FacebookController],
-  providers: [PostsService, FacebookService, InstagramService, ThreadsService],
+  providers: [PostsService, FacebookService, InstagramService, ThreadsService, YouTubeService],
   exports: [PostsService],
 })
 export class PostsModule { }

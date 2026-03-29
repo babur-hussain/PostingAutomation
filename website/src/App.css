@@ -583,28 +583,381 @@
   margin-bottom: 12px;
 }
 
-/* Media Queries */
+/* Mobile CTA - hidden on desktop by default */
+.nav-mobile-cta {
+  display: none;
+}
+
+/* ============================================
+   RESPONSIVE: Tablet (max-width: 1024px)
+   ============================================ */
 @media (max-width: 1024px) {
+  .container {
+    padding: 0 20px;
+  }
+
+  .hero-title {
+    font-size: 3.5rem;
+  }
+
   .bento-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
   .bento-large {
     grid-column: span 2;
   }
+
   .promo-container {
     flex-direction: column;
     padding: 40px;
-    gap: 60px;
+    gap: 48px;
+    text-align: center;
+  }
+
+  .promo-content {
+    max-width: 100%;
+  }
+
+  .store-buttons {
+    justify-content: center;
+  }
+
+  .promo-title {
+    font-size: 2.5rem;
   }
 }
 
+/* ============================================
+   RESPONSIVE: Mobile (max-width: 768px)
+   ============================================ */
 @media (max-width: 768px) {
-  .hero-title { font-size: 3rem; }
-  .nav-links { display: none; }
-  .bento-grid { grid-template-columns: 1fr; }
-  .bento-large { grid-column: span 1; }
-  .steps-grid { grid-template-columns: 1fr; }
-  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 40px; }
-  .footer-top { flex-direction: column; gap: 40px; }
-  .footer-links { flex-wrap: wrap; gap: 40px; }
+  /* Navbar */
+  .navbar {
+    height: 64px;
+  }
+
+  .nav-links {
+    display: none;
+  }
+
+  .nav-mobile-cta {
+    display: inline-flex;
+  }
+
+  .brand {
+    font-size: 1.25rem;
+    gap: 8px;
+  }
+
+  /* Hero */
+  .hero {
+    padding: 120px 0 60px;
+  }
+
+  .hero-title {
+    font-size: 2.5rem;
+    margin-bottom: 16px;
+  }
+
+  .hero-subtitle {
+    font-size: 1rem;
+    margin: 0 auto 32px;
+    padding: 0 8px;
+  }
+
+  .hero-pill {
+    font-size: 0.75rem;
+    padding: 5px 12px;
+  }
+
+  .hero-actions {
+    margin-bottom: 48px;
+  }
+
+  .hero-image-wrapper {
+    padding: 8px;
+    border-radius: 16px;
+  }
+
+  .hero-image-wrapper:hover {
+    transform: none;
+  }
+
+  /* Stats */
+  .stats-section {
+    padding: 60px 0;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 32px 16px;
+  }
+
+  .stat-value {
+    font-size: 2.2rem;
+  }
+
+  .stat-label {
+    font-size: 0.85rem;
+  }
+
+  /* How It Works */
+  .how-it-works {
+    padding: 80px 0 !important;
+  }
+
+  .section-header {
+    margin-bottom: 40px;
+  }
+
+  .section-title {
+    font-size: 1.8rem;
+  }
+
+  .section-subtitle {
+    font-size: 0.95rem;
+    padding: 0 8px;
+  }
+
+  .steps-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .step-card {
+    padding: 24px;
+  }
+
+  .step-number {
+    font-size: 3rem;
+  }
+
+  .step-title {
+    font-size: 1.2rem;
+  }
+
+  /* Features Bento */
+  .features {
+    padding: 80px 0 40px;
+  }
+
+  .bento-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .bento-large {
+    grid-column: span 1;
+  }
+
+  .bento-card {
+    padding: 24px;
+  }
+
+  .bento-card:hover {
+    transform: none;
+  }
+
+  .bento-icon {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 16px;
+  }
+
+  .bento-title {
+    font-size: 1.25rem;
+  }
+
+  .bento-image {
+    height: 180px;
+  }
+
+  /* App Promo */
+  .app-promo-section {
+    padding: 60px 0 !important;
+  }
+
+  .promo-container {
+    padding: 32px 24px;
+    border-radius: 24px;
+    gap: 40px;
+    text-align: center;
+  }
+
+  .promo-title {
+    font-size: 2rem;
+  }
+
+  .promo-desc {
+    font-size: 1rem;
+    margin-bottom: 28px;
+  }
+
+  .store-buttons {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .store-btn {
+    width: 100%;
+    max-width: 260px;
+    justify-content: center;
+    padding: 12px 20px;
+  }
+
+  /* Phone Mockup */
+  .phone-mockup {
+    width: 220px;
+    height: 440px;
+    border-radius: 32px;
+    border-width: 8px;
+  }
+
+  .phone-notch {
+    width: 90px;
+    height: 20px;
+  }
+
+  /* Footer */
+  .footer {
+    padding: 60px 0 32px;
+  }
+
+  .footer-top {
+    flex-direction: column;
+    gap: 32px;
+    padding-bottom: 32px;
+    margin-bottom: 24px;
+  }
+
+  .footer-brand {
+    max-width: 100%;
+  }
+
+  .footer-links {
+    flex-wrap: wrap;
+    gap: 32px;
+  }
+
+  .link-group {
+    min-width: 120px;
+  }
+
+  .footer-bottom {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+
+  /* Popup */
+  .popup-content {
+    margin: 0 16px;
+    padding: 32px 24px;
+  }
+
+  .popup-content h3 {
+    font-size: 1.5rem;
+  }
+
+  .popup-icon {
+    width: 56px;
+    height: 56px;
+  }
+}
+
+/* ============================================
+   RESPONSIVE: Small phones (max-width: 480px)
+   ============================================ */
+@media (max-width: 480px) {
+  .container {
+    padding: 0 16px;
+  }
+
+  .hero {
+    padding: 100px 0 40px;
+  }
+
+  .hero-title {
+    font-size: 2rem;
+  }
+
+  .hero-subtitle {
+    font-size: 0.9rem;
+  }
+
+  .hero-actions .btn {
+    padding: 12px 24px !important;
+    font-size: 0.95rem !important;
+  }
+
+  .stats-grid {
+    gap: 24px 12px;
+  }
+
+  .stat-value {
+    font-size: 1.8rem;
+  }
+
+  .section-title {
+    font-size: 1.5rem;
+  }
+
+  .promo-container {
+    padding: 24px 16px;
+  }
+
+  .promo-title {
+    font-size: 1.6rem;
+  }
+
+  .phone-mockup {
+    width: 180px;
+    height: 360px;
+    border-radius: 28px;
+    border-width: 6px;
+  }
+
+  .phone-notch {
+    width: 70px;
+    height: 16px;
+  }
+
+  .bento-card {
+    padding: 20px;
+  }
+
+  .step-card {
+    padding: 20px;
+  }
+
+  .footer-links {
+    gap: 24px;
+  }
+}
+
+/* ============================================
+   Touch device optimizations
+   ============================================ */
+@media (hover: none) {
+  .hero-image-wrapper:hover,
+  .bento-card:hover,
+  .btn-primary:hover,
+  .btn-secondary:hover,
+  .store-btn:hover {
+    transform: none;
+  }
+
+  /* Ensure adequate touch targets (48px minimum) */
+  .nav-link,
+  .link-group a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .store-btn {
+    min-height: 48px;
+  }
 }

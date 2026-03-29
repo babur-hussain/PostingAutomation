@@ -70,6 +70,11 @@ function App() {
             <a href="#download" className="nav-link" style={{ color: 'var(--primary-light)' }}>Get the App</a>
           </div>
 
+          {/* Mobile-only CTA */}
+          <a href="#" onClick={handleStoreClick} className="nav-mobile-cta btn btn-primary" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
+            Get App
+          </a>
+
         </div>
       </nav>
 

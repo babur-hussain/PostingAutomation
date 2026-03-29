@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { 
   Share2, ArrowRight, Layers, BarChart3, Clock, 
   MessageCircle, Sparkles, Zap, Globe2, 
-  Play, Apple, Smartphone, Settings, MapPin, Search, Users
+  Play, Apple, Smartphone, Settings, MapPin, Search, Users,
+  Menu, X
 } from 'lucide-react';
 import Lenis from 'lenis';
 import 'lenis/dist/lenis.css';
@@ -11,11 +12,20 @@ import './App.css';
 function App() {
   const [scrolled, setScrolled] = useState(false);
   const [showComingSoon, setShowComingSoon] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleStoreClick = (e) => {
     e.preventDefault();
     setShowComingSoon(true);
   };
+
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+  }, [isMobileMenuOpen]);
 
   useEffect(() => {
     // Lenis Smooth Scroll Setup
@@ -67,14 +77,37 @@ function App() {
             <a href="#features" className="nav-link">Features</a>
             <a href="#how-it-works" className="nav-link">How it Works</a>
             <a href="#analytics" className="nav-link">Analytics</a>
-            <a href="#download" className="nav-link" style={{ color: 'var(--primary-light)' }}>Get the App</a>
+            <a href="#download" className="nav-link text-primary-light">Get the App</a>
           </div>
 
-          {/* Mobile-only CTA */}
-          <a href="#" onClick={handleStoreClick} className="nav-mobile-cta btn btn-primary" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
-            Get App
-          </a>
+          {/* Mobile Actions */}
+          <div className="nav-actions">
+            <a href="#" onClick={handleStoreClick} className="btn btn-primary nav-cta">
+              Get App
+            </a>
+            <button 
+              className="mobile-menu-toggle"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label="Toggle mobile menu"
+            >
+              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
+        </div>
 
+        {/* Mobile Menu Overlay */}
+        <div className={`mobile-menu ${isMobileMenuOpen ? 'open' : ''}`}>
+          <div className="mobile-menu-links">
+            <a href="#features" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>Features</a>
+            <a href="#how-it-works" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>How it Works</a>
+            <a href="#analytics" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>Analytics</a>
+            <a href="#download" className="mobile-nav-link text-primary-light" onClick={() => setIsMobileMenuOpen(false)}>Get the App</a>
+          </div>
+          <div className="mobile-menu-footer">
+            <a href="#" onClick={(e) => { setIsMobileMenuOpen(false); handleStoreClick(e); }} className="btn btn-primary w-full">
+              Download the App <Smartphone size={18} />
+            </a>
+          </div>
         </div>
       </nav>
 
@@ -95,7 +128,7 @@ function App() {
         </p>
         
         <div className="hero-actions">
-          <a href="#" onClick={handleStoreClick} className="btn btn-primary btn-lg" style={{ padding: '16px 32px', fontSize: '1.1rem' }}>
+          <a href="#" onClick={handleStoreClick} className="btn btn-primary btn-lg">
             Download the App
             <Smartphone size={20} />
           </a>
@@ -133,7 +166,7 @@ function App() {
       </section>
 
       {/* How It Works Section */}
-      <section id="how-it-works" className="how-it-works container" style={{ padding: '120px 0' }}>
+      <section id="how-it-works" className="how-it-works container section-padding">
         <div className="section-header">
           <h2 className="section-title">Post everywhere in three steps</h2>
           <p className="section-subtitle">Simplified workflows designed to save you hours every week.</p>
@@ -159,7 +192,7 @@ function App() {
       </section>
 
       {/* Features Bento Grid */}
-      <section id="features" className="features container" style={{ paddingBottom: '60px' }}>
+      <section id="features" className="features container section-padding-bottom">
         <div className="section-header">
           <h2 className="section-title">Everything you need to grow</h2>
           <p className="section-subtitle">A powerful suite of tools designed for modern creators.</p>
@@ -241,7 +274,7 @@ function App() {
       </section>
 
       {/* App Download / Promotional CTA */}
-      <section id="download" className="app-promo-section container" style={{ padding: '120px 0' }}>
+      <section id="download" className="app-promo-section container section-padding">
         <div className="promo-container glass-panel">
           <div className="promo-content">
             <div className="promo-badge">

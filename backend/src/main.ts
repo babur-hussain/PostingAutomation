@@ -57,7 +57,7 @@ async function bootstrap() {
   // Swagger API documentation (development only)
   if (configService.get<string>('nodeEnv') !== 'production') {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('PostingAutomation API')
+      .setTitle('Post Once API')
       .setDescription('Social Media Auto-Posting Platform API')
       .setVersion('1.0')
       .addBearerAuth()

@@ -260,6 +260,7 @@ export class SocialAccountsService {
       username: string;
       name: string;
       profilePictureUrl?: string;
+      accountType?: string;
     } = {
       userId: igUserId,
       username: `instagram_user_${igUserId}`,
@@ -268,11 +269,13 @@ export class SocialAccountsService {
     try {
       profile = await this.instagramProvider.getUserProfile(token);
       this.logger.log(`Got Instagram profile: ${profile.username}`);
-    } catch (err) {
+    } catch (err: any) {
       const errBody = err?.response?.data
         ? JSON.stringify(err.response.data)
         : err?.message;
-      this.logger.warn(`Failed to get Instagram profile: ${errBody}`);
+      this.logger.warn(`Failed to get Instagram profile for IG token (Meta edge rejection is normal for some Professional tokens on GET /me): ${errBody}`);
+      // Proceed with the dummy profile object! Do not throw an error and block the user, 
+      // as Meta's publishing edges (POST /me/media) often work flawlessly even if GET /me fails.
     }
 
     // 4. Store the account

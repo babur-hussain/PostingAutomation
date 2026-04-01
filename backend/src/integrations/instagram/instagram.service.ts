@@ -1,11 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
+import { ImageResizeService } from '../../common/services/image-resize.service';
 
 const GRAPH_API_VERSION = 'v25.0';
 
 @Injectable()
 export class InstagramService {
   private readonly logger = new Logger(InstagramService.name);
+
+  constructor(private readonly imageResizeService: ImageResizeService) { }
 
   /**
    * Instagram Content Publishing API for Instagram Business Login.
@@ -70,12 +73,25 @@ export class InstagramService {
         }
       }
 
+      // 0. Auto-resize image if aspect ratio is outside Instagram's allowed range
+      let finalMediaUrl = mediaUrl;
+      if (!this.isVideoUrl(mediaUrl)) {
+        try {
+          finalMediaUrl = await this.imageResizeService.ensureValidAspectRatio(mediaUrl, 'instagram');
+          if (finalMediaUrl !== mediaUrl) {
+            this.logger.log(`Image resized for Instagram compliance. New URL: ${finalMediaUrl}`);
+          }
+        } catch (resizeErr) {
+          this.logger.warn(`Image resize failed (${resizeErr.message}), using original image`);
+        }
+      }
+
       // 1. Create container
       const containerId = await this.createContainer(
         apiBase,
         igBusinessAccountId,
         accessToken,
-        mediaUrl,
+        finalMediaUrl,
         caption,
         isNativeToken,
         locationId,
@@ -103,13 +119,12 @@ export class InstagramService {
       return publishedId;
     } catch (error) {
       const metaError = error?.response?.data?.error || error?.response?.data;
+      const errorMessage = metaError?.message || metaError?.error_user_msg || error?.message || 'Unknown error occurred while publishing to Instagram.';
       this.logger.error(
         `Publishing failed: ${metaError ? JSON.stringify(metaError) : error?.message}`,
       );
-      lastError = error;
+      throw new Error(errorMessage);
     }
-
-    throw lastError;
   }
 
   private async createContainer(
@@ -156,7 +171,7 @@ export class InstagramService {
   ): Promise<string> {
     const targetAccountId = isNativeToken ? 'me' : igAccountId;
     const url = `${apiBase}/${targetAccountId}/media_publish`;
-    this.logger.log(`Publishing container ${creationId} at ${url}`);
+    this.logger.log(`Publishing container ${creationId} at ${url} (URLSearchParams)`);
 
     const params = new URLSearchParams();
     params.append('creation_id', creationId);
@@ -167,6 +182,7 @@ export class InstagramService {
     });
     return response.data.id;
   }
+
 
   private async waitForMediaReady(
     apiBase: string,
@@ -384,7 +400,7 @@ export class InstagramService {
       this.logger.error(
         `Failed to fetch Instagram media history: ${error?.response?.data?.error?.message || error.message}`,
       );
-      throw error;
+      return { data: [], paging: { hasNext: false } };
     }
   }
 

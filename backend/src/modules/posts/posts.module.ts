@@ -13,6 +13,7 @@ import { ThreadsService } from '../../integrations/threads/threads.service';
 import { InstagramController } from '../../integrations/instagram/instagram.controller';
 import { FacebookController } from '../../integrations/facebook/facebook.controller';
 import { YouTubeService } from '../../integrations/youtube/youtube.service';
+import { ImageResizeService } from '../../common/services/image-resize.service';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { YouTubeService } from '../../integrations/youtube/youtube.service';
     forwardRef(() => SocialAccountsModule),
   ],
   controllers: [PostsController, InstagramController, FacebookController],
-  providers: [PostsService, FacebookService, InstagramService, ThreadsService, YouTubeService],
+  providers: [PostsService, FacebookService, InstagramService, ThreadsService, YouTubeService, ImageResizeService],
   exports: [PostsService],
 })
 export class PostsModule { }

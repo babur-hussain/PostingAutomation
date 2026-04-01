@@ -1,10 +1,13 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import axios from 'axios';
+import { ImageResizeService } from '../../common/services/image-resize.service';
 
 @Injectable()
 export class ThreadsService {
   private readonly logger = new Logger(ThreadsService.name);
   private readonly apiBase = 'https://graph.threads.net/v1.0';
+
+  constructor(private readonly imageResizeService: ImageResizeService) { }
 
   /**
    * Main function to publish a Threads post.
@@ -26,7 +29,17 @@ export class ThreadsService {
       } else if (this.isVideoUrl(mediaUrl)) {
         creationId = await this.createVideoContainer(threadsAccountId, accessToken, mediaUrl, caption, location);
       } else {
-        creationId = await this.createImageContainer(threadsAccountId, accessToken, mediaUrl, caption, location);
+        // Auto-resize image if aspect ratio is outside allowed range
+        let resizedUrl = mediaUrl;
+        try {
+          resizedUrl = await this.imageResizeService.ensureValidAspectRatio(mediaUrl, 'threads');
+          if (resizedUrl !== mediaUrl) {
+            this.logger.log(`Image resized for Threads compliance. New URL: ${resizedUrl}`);
+          }
+        } catch (resizeErr) {
+          this.logger.warn(`Image resize failed (${resizeErr.message}), using original image`);
+        }
+        creationId = await this.createImageContainer(threadsAccountId, accessToken, resizedUrl, caption, location);
       }
 
       // Wait a short moment for the container to process if there's media

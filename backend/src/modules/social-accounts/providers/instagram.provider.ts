@@ -147,18 +147,19 @@ export class InstagramProvider {
 
   /**
    * Get Instagram user profile info.
-   * GET https://graph.instagram.com/v21.0/me
+   * GET https://graph.instagram.com/v21.0/{user_id}
    */
   async getUserProfile(accessToken: string): Promise<{
     userId: string;
     username: string;
     name: string;
     profilePictureUrl?: string;
+    accountType?: string;
   }> {
     const axios = (await import('axios')).default;
-    const response = await axios.get('https://graph.instagram.com/v21.0/me', {
+    const response = await axios.get(`https://graph.instagram.com/v21.0/me`, {
       params: {
-        fields: 'user_id,username,name,profile_picture_url',
+        fields: 'user_id,username,name,profile_picture_url,account_type',
         access_token: accessToken,
       },
     });
@@ -168,6 +169,7 @@ export class InstagramProvider {
       username: response.data.username,
       name: response.data.name || response.data.username,
       profilePictureUrl: response.data.profile_picture_url,
+      accountType: response.data.account_type,
     };
   }
 

@@ -11,6 +11,7 @@ import { FacebookService } from '../../integrations/facebook/facebook.service';
 import { YouTubeService } from '../../integrations/youtube/youtube.service';
 import { XService } from '../../integrations/x/x.service';
 import { ThreadsService } from '../../integrations/threads/threads.service';
+import { ImageResizeService } from '../../common/services/image-resize.service';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { ThreadsService } from '../../integrations/threads/threads.service';
     YouTubeService,
     XService,
     ThreadsService,
+    ImageResizeService,
   ],
   exports: [PostSchedulerService],
 })

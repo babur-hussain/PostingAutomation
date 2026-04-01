@@ -1,11 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
 import { withRetry } from '../../common/utils/retry.util';
+import { ImageResizeService } from '../../common/services/image-resize.service';
 
 @Injectable()
 export class FacebookService {
   private readonly logger = new Logger(FacebookService.name);
   private readonly apiBase = 'https://graph.facebook.com/v22.0';
+
+  constructor(private readonly imageResizeService: ImageResizeService) { }
 
   /**
    * Main function to publish a Facebook post.
@@ -63,7 +66,7 @@ export class FacebookService {
         return await this.publishPhoto(
           pageId,
           pageAccessToken,
-          mediaUrl,
+          await this.resizeIfNeeded(mediaUrl),
           caption,
           placeId,
         );
@@ -141,6 +144,18 @@ export class FacebookService {
 
   private isVideoUrl(url: string): boolean {
     return /\.(mp4|mov|avi|wmv|webm)(\?.*)?$/i.test(url);
+  }
+
+  /**
+   * Auto-resize image if its aspect ratio is outside the allowed range.
+   */
+  private async resizeIfNeeded(mediaUrl: string): Promise<string> {
+    try {
+      return await this.imageResizeService.ensureValidAspectRatio(mediaUrl, 'facebook');
+    } catch (err) {
+      this.logger.warn(`Image resize failed (${err.message}), using original image`);
+      return mediaUrl;
+    }
   }
 
   /**
@@ -254,7 +269,7 @@ export class FacebookService {
   ): Promise<{ data: any[]; paging: { nextCursor?: string; hasNext: boolean } }> {
     try {
       this.logger.log(`Fetching posts history for Facebook Page: ${pageId}`);
-      
+
       const response = await axios.get(`${this.apiBase}/${pageId}/published_posts`, {
         params: {
           fields: 'id,message,created_time,full_picture,permalink_url',

@@ -24,6 +24,7 @@ export class PublishResult {
   platform: PostPlatform;
   success: boolean;
   platformPostId?: string;
+  permalink?: string;
   error?: string;
   publishedAt?: Date;
 }

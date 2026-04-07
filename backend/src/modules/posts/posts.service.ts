@@ -426,20 +426,62 @@ export class PostsService {
     const decryptedToken = targetAccount.decryptedToken;
     const platformAccountId = targetAccount.account.accountId;
 
+    let result: { data: any[]; paging: { nextCursor?: string; hasNext: boolean } };
+
     if (platform === SocialPlatform.FACEBOOK) {
       const fbService = this.facebookService as any;
-      return fbService.getAccountPosts(platformAccountId, decryptedToken, limit, cursor);
+      result = await fbService.getAccountPosts(platformAccountId, decryptedToken, limit, cursor);
     } else if (platform === SocialPlatform.INSTAGRAM) {
       const igService = this.instagramService as any;
-      return igService.getAccountPosts(platformAccountId, decryptedToken, limit, cursor);
+      result = await igService.getAccountPosts(platformAccountId, decryptedToken, limit, cursor);
     } else if (platform === SocialPlatform.THREADS) {
       const thService = this.threadsService as any;
-      return thService.getAccountPosts(platformAccountId, decryptedToken, limit, cursor);
+      result = await thService.getAccountPosts(platformAccountId, decryptedToken, limit, cursor);
     } else if (platform === SocialPlatform.YOUTUBE) {
-      return this.youtubeService.getAccountPosts(platformAccountId, decryptedToken, limit, cursor);
+      result = await this.youtubeService.getAccountPosts(platformAccountId, decryptedToken, limit, cursor);
+    } else {
+      throw new BadRequestException('Platform history not supported');
     }
 
-    throw new BadRequestException('Platform history not supported');
+    // Filter out posts that were deleted through the app.
+    // Some platforms (e.g. Instagram) don't support API deletion, so the post
+    // remains live on the platform even after the user "deleted" it in-app.
+    // We cross-reference with local DB entries to hide them.
+    try {
+      const deletedPosts = await this.postModel.find({
+        userId: new Types.ObjectId(userId),
+        'publishResults.platform': platform,
+        'publishResults.success': false,
+        'publishResults.error': 'Post deleted from platform',
+      }).select('publishResults').lean();
+
+      if (deletedPosts.length > 0) {
+        const deletedPlatformIds = new Set<string>();
+        for (const post of deletedPosts) {
+          for (const pr of (post as any).publishResults || []) {
+            if (
+              pr.platform === platform &&
+              !pr.success &&
+              pr.error === 'Post deleted from platform' &&
+              pr.platformPostId
+            ) {
+              deletedPlatformIds.add(pr.platformPostId);
+            }
+          }
+        }
+
+        if (deletedPlatformIds.size > 0) {
+          result.data = result.data.filter(
+            (item: any) => !deletedPlatformIds.has(item.id),
+          );
+        }
+      }
+    } catch (filterErr) {
+      this.logger.warn(`Failed to filter deleted posts: ${filterErr.message}`);
+      // Return unfiltered results on error — better than crashing
+    }
+
+    return result;
   }
 
   async getPlatformPostAnalytics(userId: string, accountId: string, platformPostId: string) {

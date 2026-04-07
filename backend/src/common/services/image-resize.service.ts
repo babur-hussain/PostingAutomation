@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import sharp = require('sharp');
@@ -65,9 +66,10 @@ export class ImageResizeService {
             `[${platform}] Image dimensions: ${width}x${height}, ratio: ${currentRatio.toFixed(3)} (allowed: ${this.MIN_RATIO.toFixed(3)}–${this.MAX_RATIO.toFixed(3)})`,
         );
 
-        // If the ratio is within the allowed range, no processing needed
-        if (currentRatio >= this.MIN_RATIO && currentRatio <= this.MAX_RATIO) {
-            this.logger.log(`[${platform}] Image aspect ratio is within limits, no resize needed`);
+        // If the ratio is within the allowed range AND it's already a JPEG, no processing needed
+        // (Instagram ONLY accepts JPEG. PNGs must be converted even if their ratio is perfect)
+        if (currentRatio >= this.MIN_RATIO && currentRatio <= this.MAX_RATIO && metadata.format === 'jpeg') {
+            this.logger.log(`[${platform}] Image aspect ratio is within limits and is already JPEG, no resize needed`);
             return imageUrl;
         }
 
@@ -118,9 +120,17 @@ export class ImageResizeService {
             }),
         );
 
-        const newUrl = `https://${this.bucketName}.s3.${this.awsRegion}.amazonaws.com/${s3Key}`;
-        this.logger.log(`[${platform}] Uploaded resized image to S3: ${newUrl}`);
-        return newUrl;
+        // Generate Presigned URL
+        const command = new GetObjectCommand({
+            Bucket: this.bucketName,
+            Key: s3Key,
+        });
+        const presignedUrl = await getSignedUrl(this.s3Client, command, {
+            expiresIn: 3600, // 1 hour
+        });
+
+        this.logger.log(`[${platform}] Uploaded resized image to S3: ${presignedUrl.substring(0, 100)}...`);
+        return presignedUrl;
     }
 
     /**

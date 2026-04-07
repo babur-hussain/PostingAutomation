@@ -19,7 +19,7 @@ export class FacebookService {
     caption: string,
     mediaUrl: string | null = null,
     location?: { name: string; lat: number; lng: number }
-  ): Promise<string> {
+  ): Promise<any> {
     return withRetry(async () => {
       try {
         this.logger.log(`Starting publish process for Facebook Page: ${pageId}`);
@@ -49,27 +49,36 @@ export class FacebookService {
           }
         }
 
+        let publishedId = '';
         if (!mediaUrl) {
-          return await this.publishTextPost(pageId, pageAccessToken, caption, placeId);
-        }
-
-        if (this.isVideoUrl(mediaUrl)) {
-          return await this.publishVideo(
+          publishedId = await this.publishTextPost(pageId, pageAccessToken, caption, placeId);
+        } else if (this.isVideoUrl(mediaUrl)) {
+          publishedId = await this.publishVideo(
             pageId,
             pageAccessToken,
             mediaUrl,
             caption,
             placeId,
           );
+        } else {
+          publishedId = await this.publishPhoto(
+            pageId,
+            pageAccessToken,
+            await this.resizeIfNeeded(mediaUrl),
+            caption,
+            placeId,
+          );
         }
 
-        return await this.publishPhoto(
-          pageId,
-          pageAccessToken,
-          await this.resizeIfNeeded(mediaUrl),
-          caption,
-          placeId,
-        );
+        let permalink = '';
+        try {
+          const pRes = await axios.get(`${this.apiBase}/${publishedId}`, { params: { fields: 'permalink_url', access_token: pageAccessToken } });
+          permalink = pRes.data.permalink_url || '';
+        } catch (e) {
+          this.logger.warn(`Could not fetch permalink for Facebook post ${publishedId}`);
+        }
+
+        return { id: publishedId, permalink };
       } catch (error) {
         this.logger.error(
           `Failed to publish Facebook post: ${error?.response?.data?.error?.message || error.message}`,

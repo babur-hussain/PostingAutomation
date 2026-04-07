@@ -18,7 +18,7 @@ export class ThreadsService {
     caption: string,
     mediaUrl: string | null = null,
     location?: { name: string; lat: number; lng: number } | null,
-  ): Promise<string> {
+  ): Promise<any> {
     try {
       this.logger.log(`Starting publish process for Threads account: ${threadsAccountId}`);
 
@@ -47,7 +47,17 @@ export class ThreadsService {
         await this.waitForContainerStatus(creationId, accessToken);
       }
 
-      return await this.publishContainer(threadsAccountId, accessToken, creationId);
+      const publishedId = await this.publishContainer(threadsAccountId, accessToken, creationId);
+
+      let permalink = '';
+      try {
+        const pRes = await axios.get(`${this.apiBase}/${publishedId}`, { params: { fields: 'permalink', access_token: accessToken } });
+        permalink = pRes.data.permalink || '';
+      } catch (e) {
+        this.logger.warn(`Could not fetch permalink for Threads post ${publishedId}`);
+      }
+
+      return { id: publishedId, permalink };
     } catch (error: any) {
       this.logger.error(
         `Failed to publish Threads post: ${error?.response?.data?.error?.message || error.message}`,

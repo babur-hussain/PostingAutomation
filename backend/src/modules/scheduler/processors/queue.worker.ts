@@ -17,6 +17,7 @@ import { FacebookService } from '../../../integrations/facebook/facebook.service
 import { YouTubeService } from '../../../integrations/youtube/youtube.service';
 import { XService } from '../../../integrations/x/x.service';
 import { ThreadsService } from '../../../integrations/threads/threads.service';
+import { MediaService } from '../../media/media.service';
 
 @Processor('posts', { concurrency: 3 })
 export class QueueWorker extends WorkerHost {
@@ -31,6 +32,7 @@ export class QueueWorker extends WorkerHost {
     private xService: XService,
     private threadsService: ThreadsService,
     private configService: ConfigService,
+    private mediaService: MediaService,
   ) {
     super();
   }
@@ -68,6 +70,25 @@ export class QueueWorker extends WorkerHost {
         throw new Error('No social accounts found for the specified platforms');
       }
 
+      // Pre-sign S3 URLs so Meta and other platforms don't receive AccessDenied (XML) instead of media
+      const presignedMediaUrls: string[] = [];
+      if (post.mediaUrls && post.mediaUrls.length > 0) {
+        for (const url of post.mediaUrls) {
+          if (url.includes('.amazonaws.com/')) {
+            const key = url.split('.amazonaws.com/')[1];
+            if (key) {
+              try {
+                presignedMediaUrls.push(await this.mediaService.getPresignedUrl(key));
+                continue;
+              } catch (e) {
+                this.logger.warn(`Failed to presign URL for ${key}: ${e.message}`);
+              }
+            }
+          }
+          presignedMediaUrls.push(url); // Fallback to raw url
+        }
+      }
+
       const results: any[] = [];
 
       // Helper: build per-platform caption with mentions & hashtags appended
@@ -93,6 +114,7 @@ export class QueueWorker extends WorkerHost {
         const { account, decryptedToken } = accountItem;
         let success = false;
         let platformId: string | null = null;
+        let permalink: string | null = null;
         let errorMsg: string | null = null;
 
         try {
@@ -100,34 +122,38 @@ export class QueueWorker extends WorkerHost {
             (account.platform as unknown as PostPlatform) ===
             PostPlatform.INSTAGRAM
           ) {
-            const igMediaUrl = post.mediaUrls && post.mediaUrls.length > 0 ? post.mediaUrls[0] : null;
-            platformId = await this.instagramService.publishInstagramPost(
+            const igMediaUrl = presignedMediaUrls.length > 0 ? presignedMediaUrls[0] : null;
+            const res = await this.instagramService.publishInstagramPost(
               account.accountId,
               decryptedToken,
               igMediaUrl || '',
               buildCaption('instagram', post.caption),
               getLocation('instagram'),
             );
+            platformId = res.id;
+            permalink = res.permalink;
             success = true;
           } else if (
             (account.platform as unknown as PostPlatform) ===
             PostPlatform.FACEBOOK
           ) {
-            const fbMediaUrl = post.mediaUrls && post.mediaUrls.length > 0 ? post.mediaUrls[0] : null;
-            platformId = await this.facebookService.publishFacebookPost(
+            const fbMediaUrl = presignedMediaUrls.length > 0 ? presignedMediaUrls[0] : null;
+            const res = await this.facebookService.publishFacebookPost(
               account.accountId,
               decryptedToken,
               buildCaption('facebook', post.caption),
               fbMediaUrl || '',
               getLocation('facebook'),
             );
+            platformId = res.id;
+            permalink = res.permalink;
             success = true;
           } else if (
             (account.platform as unknown as PostPlatform) ===
             PostPlatform.YOUTUBE
           ) {
             // Only publish if there is a mediaUrl (video)
-            const ytMediaUrl = post.mediaUrls && post.mediaUrls.length > 0 ? post.mediaUrls[0] : null;
+            const ytMediaUrl = presignedMediaUrls.length > 0 ? presignedMediaUrls[0] : null;
             if (ytMediaUrl) {
               const ytCaption = buildCaption('youtube', post.caption);
               const youtubeTitle = ytCaption
@@ -155,7 +181,7 @@ export class QueueWorker extends WorkerHost {
               throw new Error('X API Consumer Key and Secret are not configured.');
             }
 
-            const xMediaUrl = post.mediaUrls && post.mediaUrls.length > 0 ? post.mediaUrls[0] : null;
+            const xMediaUrl = presignedMediaUrls.length > 0 ? presignedMediaUrls[0] : null;
             platformId = await this.xService.publishTweet(
               appKey,
               appSecret,
@@ -170,14 +196,16 @@ export class QueueWorker extends WorkerHost {
             (account.platform as unknown as PostPlatform) ===
             PostPlatform.THREADS
           ) {
-            const thMediaUrl = post.mediaUrls && post.mediaUrls.length > 0 ? post.mediaUrls[0] : null;
-            platformId = await this.threadsService.publishThreadsPost(
+            const thMediaUrl = presignedMediaUrls.length > 0 ? presignedMediaUrls[0] : null;
+            const res = await this.threadsService.publishThreadsPost(
               account.accountId,
               decryptedToken,
               buildCaption('threads', post.caption),
               thMediaUrl || '',
               getLocation('threads'),
             );
+            platformId = res.id;
+            permalink = res.permalink;
             success = true;
           }
         } catch (error) {
@@ -192,6 +220,7 @@ export class QueueWorker extends WorkerHost {
           platform: account.platform,
           success,
           platformPostId: platformId,
+          permalink,
           error: errorMsg,
           publishedAt: success ? new Date() : undefined,
         });

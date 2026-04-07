@@ -12,6 +12,7 @@ import { YouTubeService } from '../../integrations/youtube/youtube.service';
 import { XService } from '../../integrations/x/x.service';
 import { ThreadsService } from '../../integrations/threads/threads.service';
 import { ImageResizeService } from '../../common/services/image-resize.service';
+import { MediaModule } from '../media/media.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { ImageResizeService } from '../../common/services/image-resize.service';
     MongooseModule.forFeature([{ name: Post.name, schema: PostSchema }]),
     // Import needed modules
     SocialAccountsModule,
+    MediaModule,
   ],
   providers: [
     PostSchedulerService,

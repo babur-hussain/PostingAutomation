@@ -24,7 +24,7 @@ export class InstagramService {
     mediaUrl: string,
     caption: string,
     location?: { name: string; lat: number; lng: number }
-  ): Promise<string> {
+  ): Promise<any> {
     if (!mediaUrl) {
       throw new Error('Media URL is required for Instagram posting');
     }
@@ -115,8 +115,17 @@ export class InstagramService {
         containerId,
         isNativeToken,
       );
-      this.logger.log(`Successfully published Instagram post: ${publishedId}`);
-      return publishedId;
+
+      let permalink = '';
+      try {
+        const pRes = await axios.get(`${apiBase}/${publishedId}`, { params: { fields: 'permalink', access_token: accessToken } });
+        permalink = pRes.data.permalink || '';
+      } catch (e) {
+        this.logger.warn(`Could not fetch permalink for IG post ${publishedId}`);
+      }
+
+      this.logger.log(`Successfully published Instagram post: ${publishedId} - ${permalink}`);
+      return { id: publishedId, permalink };
     } catch (error) {
       const metaError = error?.response?.data?.error || error?.response?.data;
       const errorMessage = metaError?.message || metaError?.error_user_msg || error?.message || 'Unknown error occurred while publishing to Instagram.';

@@ -45,7 +45,6 @@
 html {
   scroll-padding-top: 100px;
   /* Leaves space for the fixed navbar when clicking anchor links */
-  overflow-x: hidden;
 }
 
 body {

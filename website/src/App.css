@@ -1,6 +1,5 @@
 .app-wrapper {
   position: relative;
-  overflow-x: hidden;
 }
 
 /* Background Effects - Using performant radial gradients instead of expensive CSS blur filters */
@@ -10,9 +9,11 @@
   height: 800px;
   border-radius: 50%;
   z-index: -1;
-  pointer-events: none; /* ensures no scroll interference */
+  pointer-events: none;
+  /* ensures no scroll interference */
   animation: pulse-glow 8s infinite alternate;
-  transform: translateZ(0); /* Hardware acceleration */
+  transform: translateZ(0);
+  /* Hardware acceleration */
 }
 
 .bg-glow-top {
@@ -42,13 +43,14 @@
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
   transition: background 0.3s;
-  transform: translateZ(0); /* Hardware acceleration */
+  transform: translateZ(0);
+  /* Hardware acceleration */
   will-change: background, box-shadow;
 }
 
 .nav-scrolled {
   background: rgba(10, 10, 12, 0.95);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 .nav-container {
@@ -95,12 +97,22 @@
 }
 
 /* Helpers */
-.w-full { width: 100%; }
-.text-primary-light { color: var(--primary-light) !important; }
+.w-full {
+  width: 100%;
+}
+
+.text-primary-light {
+  color: var(--primary-light) !important;
+}
 
 /* Layout Spacing */
-.section-padding { padding: 120px 0; }
-.section-padding-bottom { padding: 0 0 120px 0; }
+.section-padding {
+  padding: 120px 0;
+}
+
+.section-padding-bottom {
+  padding: 0 0 120px 0;
+}
 
 /* Buttons */
 .btn {
@@ -188,9 +200,9 @@
   margin: 0 auto;
   border-radius: 20px;
   padding: 12px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.0) 100%);
-  border: 1px solid rgba(255,255,255,0.1);
-  box-shadow: 0 32px 64px rgba(0,0,0,0.5);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.0) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.5);
   transition: var(--transition-normal);
   transform: translateZ(0);
 }
@@ -216,7 +228,7 @@
 
 .step-card {
   padding: 32px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   position: relative;
@@ -227,7 +239,7 @@
   font-family: var(--font-display);
   font-size: 4rem;
   font-weight: 800;
-  color: rgba(255,255,255,0.05);
+  color: rgba(255, 255, 255, 0.05);
   position: absolute;
   top: 10px;
   right: 20px;
@@ -282,7 +294,7 @@
 .bento-card:hover {
   border-color: var(--border-light);
   transform: translateY(-4px);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.2);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
 }
 
 .bento-large {
@@ -365,7 +377,7 @@
   justify-content: space-between;
   padding: 64px;
   border-radius: 32px;
-  background: linear-gradient(135deg, rgba(26,26,32,0.8), rgba(10,10,12,0.9));
+  background: linear-gradient(135deg, rgba(26, 26, 32, 0.8), rgba(10, 10, 12, 0.9));
   position: relative;
   overflow: hidden;
 }
@@ -420,7 +432,7 @@
   align-items: center;
   background: #111;
   color: #fff;
-  border: 1px solid rgba(255,255,255,0.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 12px;
   padding: 8px 20px;
   gap: 12px;
@@ -430,7 +442,7 @@
 .store-btn:hover {
   background: #222;
   transform: translateY(-2px);
-  border-color: rgba(255,255,255,0.4);
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 .store-text {
@@ -458,7 +470,7 @@
   background: #000;
   border-radius: 40px;
   border: 12px solid #2a2a35;
-  box-shadow: 0 40px 100px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.1);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1);
   position: relative;
   overflow: hidden;
   display: flex;
@@ -560,8 +572,13 @@
 }
 
 @keyframes fadeInOverlay {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .popup-content {
@@ -574,8 +591,15 @@
 }
 
 @keyframes popIn {
-  from { opacity: 0; transform: scale(0.9) translateY(10px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .popup-icon {
@@ -662,7 +686,7 @@
   text-decoration: none;
   transition: color 0.2s;
   padding: 8px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .mobile-nav-link:hover {
@@ -718,6 +742,7 @@
    RESPONSIVE: Mobile (max-width: 768px)
    ============================================ */
 @media (max-width: 768px) {
+
   /* Navbar */
   .navbar {
     height: 72px;
@@ -739,14 +764,21 @@
     top: 72px;
     height: calc(100vh - 72px);
   }
-  
+
   .bg-glow-blur {
     width: 400px;
     height: 400px;
   }
-  
-  .bg-glow-top { top: -200px; right: -200px; }
-  .bg-glow-bottom { bottom: -200px; left: -200px; }
+
+  .bg-glow-top {
+    top: -200px;
+    right: -200px;
+  }
+
+  .bg-glow-bottom {
+    bottom: -200px;
+    left: -200px;
+  }
 
   .brand {
     font-size: 1.25rem;
@@ -806,8 +838,13 @@
   }
 
   /* Layout Paddings */
-  .section-padding { padding: 80px 0 !important; }
-  .section-padding-bottom { padding: 0 0 80px 0 !important; }
+  .section-padding {
+    padding: 80px 0 !important;
+  }
+
+  .section-padding-bottom {
+    padding: 0 0 80px 0 !important;
+  }
 
   /* How It Works */
   .how-it-works {
@@ -986,8 +1023,13 @@
     padding: 100px 0 40px;
   }
 
-  .section-padding { padding: 60px 0 !important; }
-  .section-padding-bottom { padding: 0 0 60px 0 !important; }
+  .section-padding {
+    padding: 60px 0 !important;
+  }
+
+  .section-padding-bottom {
+    padding: 0 0 60px 0 !important;
+  }
 
   .hero-title {
     font-size: 2rem;
@@ -1051,6 +1093,7 @@
    Touch device optimizations
    ============================================ */
 @media (hover: none) {
+
   .hero-image-wrapper:hover,
   .bento-card:hover,
   .btn-primary:hover,

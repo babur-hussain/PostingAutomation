@@ -1,5 +1,6 @@
 .app-wrapper {
   position: relative;
+  overflow-x: clip;
 }
 
 /* Background Effects - Using performant radial gradients instead of expensive CSS blur filters */

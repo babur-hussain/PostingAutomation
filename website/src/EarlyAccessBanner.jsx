@@ -41,7 +41,7 @@ export default function EarlyAccessBanner() {
         }
     }, []);
 
-    // Poll for approval status when form is submitted
+    // Poll for approval status whenever we have an email (even if not yet submitted)
     useEffect(() => {
         if (!cookieData || isApproved || !cookieData.email) return;
 
@@ -49,15 +49,16 @@ export default function EarlyAccessBanner() {
             try {
                 const res = await fetch(`${APPS_SCRIPT_URL}/status?email=${encodeURIComponent(cookieData.email)}`);
                 const data = await res.json();
-                if (data.approved) {
+                if (data?.data?.approved || data?.approved) {
                     setIsApproved(true);
-                    setCookie({ ...cookieData, approved: true });
+                    setCookie({ ...cookieData, approved: true, submitted: true });
+                    setCookieData(prev => ({ ...prev, approved: true, submitted: true }));
                 }
             } catch (e) { /* silent fail */ }
         };
 
         checkApproval();
-        const interval = setInterval(checkApproval, 60000); // Check every minute
+        const interval = setInterval(checkApproval, 30000); // Check every 30s
         return () => clearInterval(interval);
     }, [cookieData, isApproved]);
 
@@ -82,7 +83,7 @@ export default function EarlyAccessBanner() {
 
         setIsSubmitting(true);
         try {
-            await fetch(APPS_SCRIPT_URL, {
+            const res = await fetch(APPS_SCRIPT_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -91,6 +92,11 @@ export default function EarlyAccessBanner() {
                     mobile: formData.mobile.trim()
                 })
             });
+
+            // 409 = email already registered → treat as success (they already applied)
+            if (!res.ok && res.status !== 409) {
+                throw new Error(`Server error: ${res.status}`);
+            }
 
             const data = {
                 name: formData.name.trim(),

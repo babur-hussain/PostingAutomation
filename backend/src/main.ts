@@ -28,15 +28,18 @@ async function bootstrap() {
   // Enable graceful shutdown hooks so BullMQ jobs can finish cleanly
   app.enableShutdownHooks();
 
-  // CORS — mobile apps typically don't need CORS, but allow dev origins in non-production
-  const allowedOrigins: string[] = [];
+  // CORS — allow production website and dev origins
+  const allowedOrigins: string[] = [
+    'https://postonce.lfvs.in',
+    'https://www.postonce.lfvs.in',
+  ];
 
   if (configService.get<string>('nodeEnv') !== 'production') {
     allowedOrigins.push('http://localhost:8081', 'http://localhost:19006', 'http://localhost:3000');
   }
 
   app.enableCors({
-    origin: allowedOrigins.length > 0 ? allowedOrigins : false,
+    origin: allowedOrigins,
     credentials: true,
   });
 

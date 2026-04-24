@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Sparkles, ArrowRight, CheckCircle, Download, Loader, X } from 'lucide-react';
 import './EarlyAccessBanner.css';
 
-// API endpoint targeting the NestJS backend with MongoDB
-const APPS_SCRIPT_URL = 'http://localhost:3000/api/v1/early-access';
+// API endpoint targeting the live NestJS backend with MongoDB
+const APPS_SCRIPT_URL = 'https://postingautomation.lfvs.in/api/v1/early-access';
 
 const COOKIE_KEY = 'postonce_early_access';
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.postonce';

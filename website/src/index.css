@@ -9,14 +9,14 @@
   --bg-surface: #121216;
   --bg-elevated: #1a1a20;
   --bg-glass: rgba(26, 26, 32, 0.4);
-  
+
   --primary: #6c5ce7;
   --primary-glow: rgba(108, 92, 231, 0.4);
   --primary-light: #9084f1;
-  
+
   --secondary: #00cec9;
   --secondary-glow: rgba(0, 206, 201, 0.3);
-  
+
   --accent: #fd79a8;
 
   --text-primary: #ffffff;
@@ -43,7 +43,9 @@
 }
 
 html {
-  scroll-padding-top: 100px; /* Leaves space for the fixed navbar when clicking anchor links */
+  scroll-padding-top: 100px;
+  /* Leaves space for the fixed navbar when clicking anchor links */
+  overflow-x: hidden;
 }
 
 body {
@@ -55,7 +57,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-display);
   font-weight: 700;
   line-height: 1.2;
@@ -106,13 +113,29 @@ button {
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { opacity: 0.5; filter: blur(40px); }
-  50% { opacity: 0.8; filter: blur(60px); }
+
+  0%,
+  100% {
+    opacity: 0.5;
+    filter: blur(40px);
+  }
+
+  50% {
+    opacity: 0.8;
+    filter: blur(60px);
+  }
 }
 
 .animate-fade-in {
@@ -123,13 +146,16 @@ button {
 ::-webkit-scrollbar {
   width: 10px;
 }
+
 ::-webkit-scrollbar-track {
   background: var(--bg-base);
 }
+
 ::-webkit-scrollbar-thumb {
   background: var(--bg-elevated);
   border-radius: var(--radius-full);
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border-light);
 }

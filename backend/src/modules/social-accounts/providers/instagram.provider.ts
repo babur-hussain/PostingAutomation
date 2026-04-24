@@ -191,18 +191,31 @@ export class InstagramProvider {
     // Facebook Login tokens (EAA*) can use the numeric IG Business Account ID directly.
     const isNativeToken = accessToken?.startsWith('IG');
     const apiBase = isNativeToken
-      ? 'https://graph.instagram.com/v21.0'
-      : 'https://graph.facebook.com/v21.0';
+      ? 'https://graph.instagram.com/v22.0'
+      : 'https://graph.facebook.com/v22.0';
     const targetUserId = isNativeToken ? 'me' : igUserId;
 
     this.logger.log(`IG Insights: isNativeToken=${isNativeToken}, apiBase=${apiBase}, targetUserId=${targetUserId}`);
 
-    // Helper: fetch a batch of metrics safely
+    // ── Helper: extract value from either API format ──
+    const extractInsightValue = (item: any): number => {
+      if (!item) return 0;
+      if (item.total_value !== undefined) {
+        return typeof item.total_value === 'object'
+          ? (item.total_value.value || 0)
+          : (item.total_value || 0);
+      }
+      if (item.values && item.values.length > 0) {
+        return item.values.reduce((sum: number, v: any) => sum + (v.value || 0), 0);
+      }
+      return 0;
+    };
+
+    // ── Helper: fetch account-level metrics (2-day window) ──
     const fetchMetricBatch = async (metrics: string[], period = 'day'): Promise<any[]> => {
       try {
         const now = Math.floor(Date.now() / 1000);
-        const oneDayAgo = now - (86400 * 2); // 2 days back to ensure data exists
-
+        const twoDaysAgo = now - (86400 * 2);
         const response = await axios.get(
           `${apiBase}/${targetUserId}/insights`,
           {
@@ -210,7 +223,7 @@ export class InstagramProvider {
               metric: metrics.join(','),
               period,
               metric_type: 'total_value',
-              since: oneDayAgo,
+              since: twoDaysAgo,
               until: now,
               access_token: accessToken,
             },
@@ -223,8 +236,107 @@ export class InstagramProvider {
       }
     };
 
+    // ── Helper: fetch insights for a single media item ──
+    // Media-level insights work for ALL accounts regardless of follower count.
+    // Per Meta docs: GET /{media-id}/insights?metric=reach,saved,likes,comments,shares,views
+    const fetchMediaInsights = async (mediaId: string, mediaType: string): Promise<any> => {
+      try {
+        // 'views' replaces deprecated 'impressions'. 'reach','saved','likes','comments','shares' still work.
+        const metrics = 'reach,saved,likes,comments,shares,views';
+        const response = await axios.get(
+          `${apiBase}/${mediaId}/insights`,
+          {
+            params: {
+              metric: metrics,
+              access_token: accessToken,
+            },
+          },
+        );
+        const data = response.data?.data || [];
+        const out: any = {};
+        data.forEach((item: any) => {
+          out[item.name] = extractInsightValue(item);
+        });
+        return out;
+      } catch (err: any) {
+        this.logger.warn(`IG Media insights for ${mediaId} failed: ${err?.response?.data?.error?.message || err?.message}`);
+        return {};
+      }
+    };
+
+    // ── Helper: aggregate insights from individual posts ──
+    // This is the FALLBACK for accounts with < 100 followers where account-level
+    // insights return all zeros. Media-level insights always return real data.
+    const aggregateFromPosts = async (): Promise<any> => {
+      this.logger.log('IG Insights: Account-level metrics returned all 0s (likely < 100 followers). Aggregating from individual posts...');
+      try {
+        // Fetch up to 25 recent posts
+        const mediaResponse = await axios.get(
+          `${apiBase}/${targetUserId}/media`,
+          {
+            params: {
+              fields: 'id,media_type,like_count,comments_count,timestamp',
+              limit: 25,
+              access_token: accessToken,
+            },
+          },
+        );
+        const posts = mediaResponse.data?.data || [];
+        this.logger.log(`IG Aggregation: Found ${posts.length} posts to aggregate`);
+
+        if (posts.length === 0) return null;
+
+        let totalLikes = 0;
+        let totalComments = 0;
+        let totalReach = 0;
+        let totalViews = 0;
+        let totalSaves = 0;
+        let totalShares = 0;
+
+        // Fetch insights for each post in parallel (batches of 5 to avoid rate limits)
+        const batchSize = 5;
+        for (let i = 0; i < posts.length; i += batchSize) {
+          const batch = posts.slice(i, i + batchSize);
+          const results = await Promise.all(
+            batch.map((post: any) => fetchMediaInsights(post.id, post.media_type)),
+          );
+          results.forEach((insight: any) => {
+            totalLikes += insight.likes || 0;
+            totalComments += insight.comments || 0;
+            totalReach += insight.reach || 0;
+            totalViews += insight.views || 0;
+            totalSaves += insight.saved || 0;
+            totalShares += insight.shares || 0;
+          });
+        }
+
+        // Also sum basic counts from the media list itself as a cross-check
+        posts.forEach((post: any) => {
+          // like_count and comments_count from the media list are always accurate
+          // but we prefer insight-level data if available
+        });
+
+        this.logger.log(`IG Aggregated: likes=${totalLikes}, comments=${totalComments}, reach=${totalReach}, views=${totalViews}, saves=${totalSaves}, shares=${totalShares}`);
+
+        return {
+          likes: totalLikes,
+          comments: totalComments,
+          reach: totalReach,
+          views: totalViews,
+          saves: totalSaves,
+          shares: totalShares,
+          total_interactions: totalLikes + totalComments + totalShares + totalSaves,
+          accounts_engaged: totalReach, // approximate
+          lifetime_views: totalViews,
+        };
+      } catch (err: any) {
+        this.logger.error(`IG post aggregation failed: ${err?.response?.data?.error?.message || err?.message}`);
+        return null;
+      }
+    };
+
     try {
-      // ── 1. Profile metadata (always works) ──
+      // ── 1. Profile metadata (always works, no insights permission needed) ──
       const profileResponse = await axios.get(
         `${apiBase}/${targetUserId}`,
         {
@@ -239,44 +351,9 @@ export class InstagramProvider {
       });
 
       const profile = profileResponse.data || {};
-      this.logger.log(`IG Profile raw data: ${JSON.stringify(profile)}`);
 
-      // ── 2. Insights: fetch in safe batches ──
-      // Batch 1: Reach & engagement core
-      const engagementData = await fetchMetricBatch([
-        'accounts_engaged',
-        'reach',
-        'total_interactions',
-      ]);
-
-      // Batch 2: Content interaction specifics
-      const interactionData = await fetchMetricBatch([
-        'likes',
-        'comments',
-        'shares',
-        'saves',
-      ]);
-
-      // Batch 3: Additional engagement
-      const additionalData = await fetchMetricBatch([
-        'replies',
-        'reposts',
-        'profile_links_taps',
-      ]);
-
-      // Batch 4: Follows
-      const followsData = await fetchMetricBatch([
-        'follows_and_unfollows',
-      ]);
-
-      // Batch 5: Views
-      const viewsData = await fetchMetricBatch([
-        'views',
-      ]);
-
-      // ── 3. Assemble result ──
+      // ── 2. Assemble base result with profile data ──
       const result: any = {
-        // Profile metadata
         followers: profile.followers_count || 0,
         following: profile.follows_count || 0,
         total_posts: profile.media_count || 0,
@@ -287,27 +364,53 @@ export class InstagramProvider {
         profilePicture: profile.profile_picture_url || null,
       };
 
-      // Merge all insight batches
-      // Instagram insights use total_value.value format
-      const allInsights = [...engagementData, ...interactionData, ...additionalData, ...followsData, ...viewsData];
-      this.logger.log(`IG Insights received ${allInsights.length} metric items`);
+      // ── 3. Try account-level insights (works for accounts with 100+ followers) ──
+      const engagementData = await fetchMetricBatch(['accounts_engaged', 'reach', 'total_interactions']);
+      const interactionData = await fetchMetricBatch(['likes', 'comments', 'shares', 'saves']);
+      const additionalData = await fetchMetricBatch(['replies', 'reposts', 'profile_links_taps']);
+      const followsData = await fetchMetricBatch(['follows_and_unfollows']);
+      const viewsData = await fetchMetricBatch(['views']);
 
+      const allInsights = [...engagementData, ...interactionData, ...additionalData, ...followsData, ...viewsData];
+
+      // Parse account-level insight values
       allInsights.forEach((item: any) => {
-        // Handle total_value format (new Instagram API)
-        if (item.total_value !== undefined) {
-          if (typeof item.total_value === 'object' && item.total_value.value !== undefined) {
-            result[item.name] = item.total_value.value;
-          } else {
-            result[item.name] = item.total_value;
-          }
-        }
-        // Handle legacy values[] format (fallback)
-        else if (item.values && item.values.length > 0) {
-          result[item.name] = item.values[item.values.length - 1]?.value || 0;
-        }
+        result[item.name] = extractInsightValue(item);
       });
 
-      this.logger.log(`IG Final result keys: ${Object.keys(result).join(', ')}`);
+      // ── 4. Check if account-level data is all zeros ──
+      // Per Meta docs: "Some metrics are not available on Instagram accounts
+      // with fewer than 100 followers" — they return 0 / empty instead.
+      const interactionKeys = ['reach', 'views', 'likes', 'comments', 'shares', 'saves', 'total_interactions'];
+      const allZeros = interactionKeys.every(k => !result[k] || result[k] === 0);
+
+      if (allZeros && (profile.media_count || 0) > 0) {
+        // ── 5. FALLBACK: Aggregate from individual post insights ──
+        const aggregated = await aggregateFromPosts();
+        if (aggregated) {
+          // Merge aggregated data into result (only overwrite zeros)
+          Object.keys(aggregated).forEach(key => {
+            if (!result[key] || result[key] === 0) {
+              result[key] = aggregated[key];
+            }
+          });
+          result._source = 'aggregated_from_posts';
+        }
+      } else {
+        result._source = 'account_level_insights';
+      }
+
+      // Set lifetime_views if not already set
+      if (!result.lifetime_views) {
+        result.lifetime_views = result.views || 0;
+      }
+
+      // Fallback: if 'reach' is still 0 but 'views' has data, use views as reach
+      if (!result.reach && result.views) {
+        result.reach = result.views;
+      }
+
+      this.logger.log(`IG Final result (source: ${result._source}): ${JSON.stringify(result)}`);
       return result;
     } catch (err: any) {
       this.logger.error(`Failed to fetch IG insights: ${err?.response?.data?.error?.message || err.message}`);

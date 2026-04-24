@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  Share2, ArrowRight, Layers, BarChart3, Clock, 
-  MessageCircle, Sparkles, Zap, Globe2, 
+import EarlyAccessBanner from './EarlyAccessBanner';
+import {
+  Share2, ArrowRight, Layers, BarChart3, Clock,
+  MessageCircle, Sparkles, Zap, Globe2,
   Play, Apple, Smartphone, Settings, MapPin, Search, Users,
   Menu, X
 } from 'lucide-react';
@@ -31,7 +32,7 @@ function App() {
     // Lenis Smooth Scroll Setup
     const lenis = new Lenis({
       duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), 
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       direction: 'vertical',
       gestureDirection: 'vertical',
       smooth: true,
@@ -50,7 +51,7 @@ function App() {
     const handleScroll = () => {
       setScrolled(window.scrollY > 50);
     };
-    
+
     window.addEventListener('scroll', handleScroll);
     return () => {
       window.removeEventListener('scroll', handleScroll);
@@ -72,7 +73,7 @@ function App() {
             </div>
             <span>PostOnce</span>
           </div>
-          
+
           <div className="nav-links">
             <a href="#features" className="nav-link">Features</a>
             <a href="#how-it-works" className="nav-link">How it Works</a>
@@ -85,7 +86,7 @@ function App() {
             <a href="#" onClick={handleStoreClick} className="btn btn-primary nav-cta">
               Get App
             </a>
-            <button 
+            <button
               className="mobile-menu-toggle"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               aria-label="Toggle mobile menu"
@@ -111,22 +112,25 @@ function App() {
         </div>
       </nav>
 
+      {/* Early Access Banner */}
+      <EarlyAccessBanner />
+
       {/* Hero Section */}
       <section className="hero container animate-fade-in">
         <div className="hero-pill">
           <Sparkles size={14} />
           <span>PostOnce Mobile App is now live</span>
         </div>
-        
+
         <h1 className="hero-title">
           Your creative canvas <br />
           <span className="text-gradient-primary">in your pocket.</span>
         </h1>
-        
+
         <p className="hero-subtitle">
           The ultimate social media management app for creators and agencies. Publish to Facebook, Instagram, Threads, X, and YouTube simultaneously from your phone.
         </p>
-        
+
         <div className="hero-actions">
           <a href="#" onClick={handleStoreClick} className="btn btn-primary btn-lg">
             Download the App
@@ -135,10 +139,10 @@ function App() {
         </div>
 
         <div className="hero-image-wrapper">
-          <img 
-            src="/images/hero_dashboard.png" 
-            alt="PostOnce Studio Dashboard" 
-            className="hero-image" 
+          <img
+            src="/images/hero_dashboard.png"
+            alt="PostOnce Studio Dashboard"
+            className="hero-image"
           />
         </div>
       </section>
@@ -171,7 +175,7 @@ function App() {
           <h2 className="section-title">Post everywhere in three steps</h2>
           <p className="section-subtitle">Simplified workflows designed to save you hours every week.</p>
         </div>
-        
+
         <div className="steps-grid">
           <div className="step-card">
             <div className="step-number">01</div>
@@ -285,7 +289,7 @@ function App() {
             <p className="promo-desc">
               Download the PostOnce mobile app to create, publish, and track your content from anywhere. Experience native performance, robust media upload support, and real-time push notifications.
             </p>
-            
+
             <div className="store-buttons">
               <a href="#" onClick={handleStoreClick} className="store-btn apple-btn">
                 <Apple size={28} />
@@ -294,7 +298,7 @@ function App() {
                   <span className="store-main">App Store</span>
                 </div>
               </a>
-              
+
               <a href="#" onClick={handleStoreClick} className="store-btn google-btn">
                 <Play size={24} style={{ fill: 'currentColor' }} />
                 <div className="store-text">
@@ -304,7 +308,7 @@ function App() {
               </a>
             </div>
           </div>
-          
+
           <div className="promo-visual">
             <div className="phone-mockup">
               <div className="phone-screen bg-glow-blur" style={{ opacity: 0.8, filter: 'blur(40px)', position: 'absolute' }}></div>
@@ -343,7 +347,7 @@ function App() {
               The modern mobile platform for content creators and businesses to publish, engage, and grow across the social web.
             </p>
           </div>
-          
+
           <div className="footer-links">
             <div className="link-group">
               <h4>Product</h4>
@@ -374,11 +378,11 @@ function App() {
             </div>
           </div>
         </div>
-        
+
         <div className="footer-bottom">
           <p>&copy; {new Date().getFullYear()} PostOnce Inc. All rights reserved.</p>
           <div className="social-links" style={{ display: 'flex', gap: '16px' }}>
-            <span style={{color: 'var(--text-secondary)'}}>Built for modern creators.</span>
+            <span style={{ color: 'var(--text-secondary)' }}>Built for modern creators.</span>
           </div>
         </div>
       </footer>

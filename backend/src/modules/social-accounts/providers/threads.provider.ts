@@ -154,51 +154,149 @@ export class ThreadsProvider {
   }
 
   /**
-   * Fetch aggregated account analytics by calculating sum of recent post metric insights.
+   * Fetch comprehensive account analytics for Threads.
+   * Uses a two-tier approach:
+   * 1. User-level insights via GET /{user-id}/threads_insights (90-day window)
+   * 2. Post-level aggregation by summing individual post insights
+   * Returns the best available value for each metric.
    */
   async getAccountAnalytics(accountId: string, accessToken: string): Promise<any> {
     const axios = (await import('axios')).default;
-    this.logger.log(`Fetching aggregated analytics for Threads account: ${accountId}`);
+    const apiBase = 'https://graph.threads.net/v1.0';
+    this.logger.log(`Fetching analytics for Threads account: ${accountId}`);
+
+    const result: any = {
+      total_threads: 0,
+      total_views: 0,
+      total_likes: 0,
+      total_replies: 0,
+      total_reposts: 0,
+      total_quotes: 0,
+      followers: 0,
+      username: null,
+      name: null,
+      profilePicture: null,
+      biography: null,
+    };
+
+    // ── 1. Fetch profile metadata ──
     try {
-      // 1. Fetch latest 20 posts
-      const postsResponse = await axios.get(`https://graph.threads.net/v1.0/${accountId}/threads`, {
-        params: { fields: 'id', limit: 20, access_token: accessToken }
+      const profileRes = await axios.get(`${apiBase}/me`, {
+        params: {
+          fields: 'id,username,threads_profile_picture_url,threads_biography',
+          access_token: accessToken,
+        },
       });
-      const posts = postsResponse.data.data || [];
+      const profile = profileRes.data || {};
+      result.username = profile.username || null;
+      result.name = profile.username || null;
+      result.profilePicture = profile.threads_profile_picture_url || null;
+      result.biography = profile.threads_biography || null;
+    } catch (err: any) {
+      this.logger.warn(`Threads profile fetch failed: ${err?.response?.data?.error?.message || err?.message}`);
+    }
 
-      let totalViews = 0, totalLikes = 0, totalReplies = 0, totalShares = 0;
+    // ── 2. User-level insights (90-day window) ──
+    // GET /{user-id}/threads_insights?metric=views,likes,replies,reposts,quotes&since=...&until=...
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      const ninetyDaysAgo = now - (86400 * 90);
+      const userInsightsRes = await axios.get(`${apiBase}/${accountId}/threads_insights`, {
+        params: {
+          metric: 'views,likes,replies,reposts,quotes',
+          since: ninetyDaysAgo,
+          until: now,
+          access_token: accessToken,
+        },
+      });
+      const userInsights = userInsightsRes.data?.data || [];
+      userInsights.forEach((insight: any) => {
+        const val = insight.values?.[0]?.value || 0;
+        if (insight.name === 'views') result.total_views = val;
+        if (insight.name === 'likes') result.total_likes = val;
+        if (insight.name === 'replies') result.total_replies = val;
+        if (insight.name === 'reposts') result.total_reposts = val;
+        if (insight.name === 'quotes') result.total_quotes = val;
+      });
+      this.logger.log(`Threads user-level insights: views=${result.total_views}, likes=${result.total_likes}, replies=${result.total_replies}, reposts=${result.total_reposts}`);
+    } catch (err: any) {
+      this.logger.warn(`Threads user-level insights failed: ${err?.response?.data?.error?.message || err?.message}`);
+    }
 
-      // 2. Fetch insights for each post
-      const promises = posts.map((p: any) =>
-        axios.get(`https://graph.threads.net/v1.0/${p.id}/insights`, {
-          params: { metric: 'views,likes,replies,reposts,quotes', access_token: accessToken }
-        }).catch(() => null)
-      );
+    // ── 3. Fetch followers_count separately (no since/until support) ──
+    try {
+      const followersRes = await axios.get(`${apiBase}/${accountId}/threads_insights`, {
+        params: {
+          metric: 'followers_count',
+          access_token: accessToken,
+        },
+      });
+      const followersData = followersRes.data?.data || [];
+      if (followersData.length > 0) {
+        result.followers = followersData[0].total_value?.value || followersData[0].values?.[0]?.value || 0;
+      }
+    } catch (err: any) {
+      this.logger.warn(`Threads followers_count fetch failed: ${err?.response?.data?.error?.message || err?.message}`);
+    }
 
-      const insightsResponses = await Promise.all(promises);
+    // ── 4. Post-level aggregation fallback ──
+    // If user-level insights returned all zeros, aggregate from individual posts
+    const userLevelAllZeros = !result.total_views && !result.total_likes && !result.total_replies && !result.total_reposts;
 
-      insightsResponses.forEach(res => {
-        if (res && res.data && res.data.data) {
-          res.data.data.forEach((insight: any) => {
-            const val = insight.values[0]?.value || 0;
-            if (insight.name === 'views') totalViews += val;
-            if (insight.name === 'likes') totalLikes += val;
-            if (insight.name === 'replies') totalReplies += val;
-            if (insight.name === 'reposts' || insight.name === 'quotes') totalShares += val;
+    try {
+      const postsResponse = await axios.get(`${apiBase}/${accountId}/threads`, {
+        params: { fields: 'id', limit: 25, access_token: accessToken },
+      });
+      const posts = postsResponse.data?.data || [];
+      result.total_threads = posts.length;
+
+      if (userLevelAllZeros && posts.length > 0) {
+        this.logger.log(`Threads: User-level insights returned all 0s. Aggregating from ${posts.length} individual posts...`);
+
+        let aggViews = 0, aggLikes = 0, aggReplies = 0, aggReposts = 0, aggQuotes = 0;
+
+        // Fetch insights in batches of 5
+        const batchSize = 5;
+        for (let i = 0; i < posts.length; i += batchSize) {
+          const batch = posts.slice(i, i + batchSize);
+          const results = await Promise.all(
+            batch.map((p: any) =>
+              axios.get(`${apiBase}/${p.id}/insights`, {
+                params: { metric: 'views,likes,replies,reposts,quotes', access_token: accessToken },
+              }).catch(() => null),
+            ),
+          );
+          results.forEach((res: any) => {
+            if (res?.data?.data) {
+              res.data.data.forEach((insight: any) => {
+                const val = insight.values?.[0]?.value || 0;
+                if (insight.name === 'views') aggViews += val;
+                if (insight.name === 'likes') aggLikes += val;
+                if (insight.name === 'replies') aggReplies += val;
+                if (insight.name === 'reposts') aggReposts += val;
+                if (insight.name === 'quotes') aggQuotes += val;
+              });
+            }
           });
         }
-      });
 
-      return {
-        total_threads: posts.length,
-        total_views: totalViews,
-        total_likes: totalLikes,
-        total_replies: totalReplies,
-        total_reposts: totalShares,
-      };
+        this.logger.log(`Threads aggregated: views=${aggViews}, likes=${aggLikes}, replies=${aggReplies}, reposts=${aggReposts}, quotes=${aggQuotes}`);
+
+        // Use aggregated values if they're better than user-level
+        if (aggViews > result.total_views) result.total_views = aggViews;
+        if (aggLikes > result.total_likes) result.total_likes = aggLikes;
+        if (aggReplies > result.total_replies) result.total_replies = aggReplies;
+        if (aggReposts > result.total_reposts) result.total_reposts = aggReposts;
+        if (aggQuotes > result.total_quotes) result.total_quotes = aggQuotes;
+        result._source = 'aggregated_from_posts';
+      } else {
+        result._source = 'user_level_insights';
+      }
     } catch (err: any) {
-      this.logger.error(`Failed to aggregate Threads insights: ${err?.message}`);
-      return { total_threads: 0, total_views: 0, total_likes: 0, total_replies: 0, total_reposts: 0 };
+      this.logger.error(`Failed to fetch Threads posts: ${err?.response?.data?.error?.message || err?.message}`);
     }
+
+    this.logger.log(`Threads Final result (source: ${result._source}): ${JSON.stringify(result)}`);
+    return result;
   }
 }

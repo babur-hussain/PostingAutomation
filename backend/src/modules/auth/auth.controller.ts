@@ -25,8 +25,8 @@ class UpdateNotificationPreferencesDto {
   @IsOptional() @IsBoolean() postFailure?: boolean;
 }
 
-// #9: Stricter rate limiting for auth endpoints (5 req/min instead of global 60)
-@Throttle({ default: { ttl: 60000, limit: 5 } })
+// #9: Stricter rate limiting for auth endpoints (30 req/min instead of global 60)
+@Throttle({ default: { ttl: 60000, limit: 30 } })
 @Controller('api/v1/auth')
 export class AuthController {
   constructor(private authService: AuthService) { }

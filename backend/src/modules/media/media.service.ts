@@ -82,7 +82,19 @@ export class MediaService {
       );
     }
 
-    const ext = file.originalname.split('.').pop();
+    let ext = file.originalname.split('.').pop()?.toLowerCase();
+    
+    // Ensure the extension is valid so Instagram/Facebook API correctly identifies the media type
+    if (!ext || !['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov'].includes(ext)) {
+      if (file.mimetype === 'image/jpeg') ext = 'jpg';
+      else if (file.mimetype === 'image/png') ext = 'png';
+      else if (file.mimetype === 'video/mp4') ext = 'mp4';
+      else if (file.mimetype === 'video/quicktime') ext = 'mov';
+      else if (file.mimetype === 'image/gif') ext = 'gif';
+      else if (file.mimetype === 'image/webp') ext = 'webp';
+      else ext = 'jpg'; // Fallback
+    }
+
     const uniqueName = `${uuidv4()}.${ext}`;
 
     // Try S3 first

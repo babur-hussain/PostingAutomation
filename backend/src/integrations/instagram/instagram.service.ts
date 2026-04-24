@@ -107,14 +107,38 @@ export class InstagramService {
         isNativeToken,
       );
 
-      // 2. Publish
-      const publishedId = await this.publishContainer(
-        apiBase,
-        igBusinessAccountId,
-        accessToken,
-        containerId,
-        isNativeToken,
-      );
+      // 2. Publish (with retries — Meta sometimes reports FINISHED prematurely,
+      //    causing "Media ID is not available" error code 9007 on immediate publish)
+      let publishedId: string | null = null;
+      const maxPublishRetries = 3;
+      for (let attempt = 1; attempt <= maxPublishRetries; attempt++) {
+        try {
+          publishedId = await this.publishContainer(
+            apiBase,
+            igBusinessAccountId,
+            accessToken,
+            containerId,
+            isNativeToken,
+          );
+          break; // Success — exit retry loop
+        } catch (publishError: any) {
+          const metaErr = publishError?.response?.data?.error;
+          const isTransient = metaErr?.code === 9007 || metaErr?.error_subcode === 2207027;
+          if (isTransient && attempt < maxPublishRetries) {
+            const waitMs = attempt * 3000; // 3s, 6s, 9s
+            this.logger.warn(
+              `Publish attempt ${attempt} failed with transient error (code ${metaErr?.code}). Retrying in ${waitMs}ms...`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, waitMs));
+          } else {
+            throw publishError; // Non-transient or final attempt — let outer catch handle it
+          }
+        }
+      }
+
+      if (!publishedId) {
+        throw new Error('Failed to publish Instagram container after retries');
+      }
 
       let permalink = '';
       try {
@@ -269,17 +293,34 @@ export class InstagramService {
       const comments = basicResponse.data.comments_count || 0;
       const mediaType = basicResponse.data.media_type;
 
-      // 2. Get Advanced Insights (reach, impressions). 
-      // Note: Instagram Basic Display API (native token) might not support all insights. 
-      // We will attempt to fetch what we can.
+      // 2. Get Advanced Insights (reach, views/impressions, saved).
+      // Meta deprecated 'impressions' for media created after July 2024 — use 'views' instead.
+      // The API response format also changed: newer posts use total_value.value,
+      // older posts use values[0].value. We handle both formats.
       let reach = 0;
       let impressions = 0;
       let saved = 0;
 
+      // Helper to extract a value from either API response format
+      const extractInsightValue = (insight: any): number => {
+        if (insight.total_value !== undefined) {
+          return typeof insight.total_value === 'object'
+            ? (insight.total_value.value || 0)
+            : (insight.total_value || 0);
+        }
+        if (insight.values && insight.values.length > 0) {
+          return insight.values[insight.values.length - 1]?.value || 0;
+        }
+        return 0;
+      };
+
       try {
+        // Use 'views' (replaces deprecated 'impressions') + 'reach' + 'saved'.
+        // For VIDEO/REELS also include 'ig_reels_video_view_total_time' is not needed here;
+        // 'views' already covers video plays in v22.0+.
         const metrics = mediaType === 'VIDEO' || mediaType === 'REELS'
-          ? 'impressions,reach,saved,video_views'
-          : 'impressions,reach,saved';
+          ? 'views,reach,saved'
+          : 'views,reach,saved';
 
         const insightsResponse = await axios.get(
           `${apiBase}/${platformPostId}/insights`,
@@ -293,10 +334,12 @@ export class InstagramService {
 
         const data = insightsResponse.data.data || [];
         data.forEach((insight: any) => {
-          if (insight.name === 'reach') reach = insight.values[0]?.value || 0;
-          if (insight.name === 'impressions') impressions = insight.values[0]?.value || 0;
-          if (insight.name === 'saved') saved = insight.values[0]?.value || 0;
+          if (insight.name === 'reach') reach = extractInsightValue(insight);
+          if (insight.name === 'views') impressions = extractInsightValue(insight); // views replaces impressions
+          if (insight.name === 'saved') saved = extractInsightValue(insight);
         });
+
+        this.logger.log(`IG post ${platformPostId} insights — reach: ${reach}, views: ${impressions}, saved: ${saved}`);
       } catch (insightErr) {
         this.logger.warn(`Could not fetch advanced insights for IG post ${platformPostId}: ${insightErr.message}`);
       }

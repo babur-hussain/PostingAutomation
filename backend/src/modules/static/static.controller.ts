@@ -18,4 +18,9 @@ export class StaticController {
     getDataDeletion(@Res() res: Response) {
         return res.sendFile(join(__dirname, '..', '..', '..', 'public', 'data-deletion.html'));
     }
+
+    @Get('safety-standards')
+    getSafetyStandards(@Res() res: Response) {
+        return res.sendFile(join(__dirname, '..', '..', '..', 'public', 'safety-standards.html'));
+    }
 }

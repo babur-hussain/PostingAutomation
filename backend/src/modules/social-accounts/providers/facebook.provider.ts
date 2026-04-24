@@ -172,18 +172,20 @@ export class FacebookProvider {
 
   /**
    * Get comprehensive insights for a Facebook Page.
-   * Fetches metrics in safe batches to avoid a single deprecated metric killing the entire request.
-   * Reference: https://developers.facebook.com/docs/graph-api/reference/page/insights/
+   * Fetches metrics in safe batches. If all page-level metrics are 0 (happens for
+   * pages with < 100 likes per Meta docs), falls back to aggregating from individual posts.
+   * Reference: https://developers.facebook.com/docs/graph-api/reference/v25.0/insights
    */
   async getPageInsights(accessToken: string, pageId: string): Promise<any> {
     const axios = (await import('axios')).default;
+    const apiBase = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
     this.logger.log(`Fetching Facebook insights for page: ${pageId}`);
 
-    // Helper: fetch a batch of metrics safely
+    // Helper: fetch a batch of page-level metrics safely
     const fetchMetricBatch = async (metrics: string[], period = 'day'): Promise<any[]> => {
       try {
         const response = await axios.get(
-          `https://graph.facebook.com/${GRAPH_API_VERSION}/${pageId}/insights`,
+          `${apiBase}/${pageId}/insights`,
           {
             params: {
               metric: metrics.join(','),
@@ -199,10 +201,114 @@ export class FacebookProvider {
       }
     };
 
+    // Helper: fetch engagement data for a single post
+    const fetchPostEngagement = async (postId: string): Promise<any> => {
+      try {
+        const response = await axios.get(
+          `${apiBase}/${postId}`,
+          {
+            params: {
+              fields: 'shares,likes.summary(true),comments.summary(true)',
+              access_token: accessToken,
+            },
+          },
+        );
+        const data = response.data;
+        const out = {
+          likes: data.likes?.summary?.total_count || 0,
+          comments: data.comments?.summary?.total_count || 0,
+          shares: data.shares?.count || 0,
+          reach: 0,
+          impressions: 0,
+        };
+        // Try to also get reach/impressions from post insights
+        try {
+          const insightsRes = await axios.get(
+            `${apiBase}/${postId}/insights`,
+            {
+              params: {
+                metric: 'post_impressions,post_impressions_unique',
+                access_token: accessToken,
+              },
+            },
+          );
+          (insightsRes.data?.data || []).forEach((insight: any) => {
+            if (insight.name === 'post_impressions_unique') {
+              out.reach = insight.values?.[0]?.value || 0;
+            }
+            if (insight.name === 'post_impressions') {
+              out.impressions = insight.values?.[0]?.value || 0;
+            }
+          });
+        } catch {
+          // Post insights may not be available for all posts
+        }
+        return out;
+      } catch (err: any) {
+        this.logger.warn(`FB Post engagement for ${postId} failed: ${err?.response?.data?.error?.message || err?.message}`);
+        return { likes: 0, comments: 0, shares: 0, reach: 0, impressions: 0 };
+      }
+    };
+
+    // Helper: aggregate insights from individual posts (fallback for pages < 100 likes)
+    const aggregateFromPosts = async (): Promise<any> => {
+      this.logger.log('FB Insights: Page-level metrics returned all 0s (likely < 100 likes). Aggregating from individual posts...');
+      try {
+        const mediaResponse = await axios.get(
+          `${apiBase}/${pageId}/published_posts`,
+          {
+            params: {
+              fields: 'id,created_time',
+              limit: 25,
+              access_token: accessToken,
+            },
+          },
+        );
+        const posts = mediaResponse.data?.data || [];
+        this.logger.log(`FB Aggregation: Found ${posts.length} posts to aggregate`);
+        if (posts.length === 0) return null;
+
+        let totalLikes = 0;
+        let totalComments = 0;
+        let totalShares = 0;
+        let totalReach = 0;
+        let totalImpressions = 0;
+
+        const batchSize = 5;
+        for (let i = 0; i < posts.length; i += batchSize) {
+          const batch = posts.slice(i, i + batchSize);
+          const results = await Promise.all(
+            batch.map((post: any) => fetchPostEngagement(post.id)),
+          );
+          results.forEach((eng: any) => {
+            totalLikes += eng.likes || 0;
+            totalComments += eng.comments || 0;
+            totalShares += eng.shares || 0;
+            totalReach += eng.reach || 0;
+            totalImpressions += eng.impressions || 0;
+          });
+        }
+
+        this.logger.log(`FB Aggregated: likes=${totalLikes}, comments=${totalComments}, shares=${totalShares}, reach=${totalReach}, impressions=${totalImpressions}`);
+        return {
+          page_post_engagements: totalLikes + totalComments + totalShares,
+          page_posts_impressions: totalImpressions,
+          page_posts_impressions_unique: totalReach,
+          page_media_view: totalImpressions,
+          total_likes: totalLikes,
+          total_comments: totalComments,
+          total_shares: totalShares,
+        };
+      } catch (err: any) {
+        this.logger.error(`FB post aggregation failed: ${err?.response?.data?.error?.message || err?.message}`);
+        return null;
+      }
+    };
+
     try {
       // ── 1. Profile metadata (always works, no read_insights needed) ──
       const profileResponse = await axios.get(
-        `https://graph.facebook.com/${GRAPH_API_VERSION}/${pageId}`,
+        `${apiBase}/${pageId}`,
         {
           params: {
             fields: 'followers_count,fan_count,about,bio,description,category,website,name,username,picture.width(200),cover,new_like_count,talking_about_count,were_here_count,rating_count,overall_star_rating,phone,single_line_address,link',
@@ -215,45 +321,9 @@ export class FacebookProvider {
       });
 
       const profile = profileResponse.data || {};
-      this.logger.log(`FB Profile raw data: ${JSON.stringify(profile)}`);
 
-      // ── 2. Insights: fetch in safe batches ──
-      // Batch 1: Engagement metrics
-      const engagementData = await fetchMetricBatch([
-        'page_post_engagements',
-        'page_total_actions',
-        'page_daily_follows',
-        'page_daily_follows_unique',
-        'page_daily_unfollows_unique',
-        'page_follows',
-      ]);
-
-      // Batch 2: Views metrics
-      const viewsData = await fetchMetricBatch([
-        'page_views_total',
-      ]);
-
-      // Batch 3: Video metrics
-      const videoData = await fetchMetricBatch([
-        'page_video_views',
-        'page_video_views_unique',
-        'page_video_complete_views_30s',
-      ]);
-
-      // Batch 4: Media view metrics
-      const mediaData = await fetchMetricBatch([
-        'page_media_view',
-      ]);
-
-      // Batch 5: Post impressions
-      const postImpressionData = await fetchMetricBatch([
-        'page_posts_impressions',
-        'page_posts_impressions_unique',
-      ]);
-
-      // ── 3. Assemble result ──
+      // ── 2. Assemble base result ──
       const result: any = {
-        // Profile metadata
         followers: profile.followers_count || profile.fan_count || 0,
         page_fans: profile.fan_count || profile.followers_count || 0,
         name: profile.name || null,
@@ -273,6 +343,27 @@ export class FacebookProvider {
         overall_star_rating: profile.overall_star_rating || 0,
       };
 
+      // ── 3. Try page-level insights ──
+      const engagementData = await fetchMetricBatch([
+        'page_post_engagements',
+        'page_total_actions',
+        'page_daily_follows',
+        'page_daily_follows_unique',
+        'page_daily_unfollows_unique',
+        'page_follows',
+      ]);
+      const viewsData = await fetchMetricBatch(['page_views_total']);
+      const videoData = await fetchMetricBatch([
+        'page_video_views',
+        'page_video_views_unique',
+        'page_video_complete_views_30s',
+      ]);
+      const mediaData = await fetchMetricBatch(['page_media_view']);
+      const postImpressionData = await fetchMetricBatch([
+        'page_posts_impressions',
+        'page_posts_impressions_unique',
+      ]);
+
       // Merge all insight batches
       const allInsights = [...engagementData, ...viewsData, ...videoData, ...mediaData, ...postImpressionData];
       this.logger.log(`FB Insights received ${allInsights.length} metric items`);
@@ -282,7 +373,29 @@ export class FacebookProvider {
         result[item.name] = val !== undefined ? val : 0;
       });
 
-      this.logger.log(`FB Final result keys: ${Object.keys(result).join(', ')}`);
+      // ── 4. Check if page-level data is all zeros (pages with < 100 likes) ──
+      const insightKeys = [
+        'page_post_engagements', 'page_views_total', 'page_video_views',
+        'page_media_view', 'page_posts_impressions', 'page_posts_impressions_unique',
+      ];
+      const allZeros = insightKeys.every(k => !result[k] || result[k] === 0);
+
+      if (allZeros) {
+        // ── 5. FALLBACK: Aggregate from individual post data ──
+        const aggregated = await aggregateFromPosts();
+        if (aggregated) {
+          Object.keys(aggregated).forEach(key => {
+            if (!result[key] || result[key] === 0) {
+              result[key] = aggregated[key];
+            }
+          });
+          result._source = 'aggregated_from_posts';
+        }
+      } else {
+        result._source = 'page_level_insights';
+      }
+
+      this.logger.log(`FB Final result (source: ${result._source}): keys=${Object.keys(result).join(', ')}`);
       return result;
     } catch (err: any) {
       this.logger.error(`Failed to fetch FB insights: ${err?.response?.data?.error?.message || err.message}`);

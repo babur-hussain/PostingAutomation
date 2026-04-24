@@ -21,6 +21,8 @@ import { MessagesModule } from './modules/messages/messages.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { HealthModule } from './modules/health/health.module';
 import { StaticModule } from './modules/static/static.module';
+import { BetaRequestsModule } from './modules/beta-requests/beta-requests.module';
+import { EarlyAccessModule } from './modules/early-access/early-access.module';
 
 @Module({
   imports: [
@@ -51,6 +53,9 @@ import { StaticModule } from './modules/static/static.module';
     MessagesModule,
     WebhooksModule,
     HealthModule,
+    StaticModule,
+    BetaRequestsModule,
+    EarlyAccessModule,
   ],
   providers: [
     // Apply rate limiting globally (60 req/min default, overridable per-route)

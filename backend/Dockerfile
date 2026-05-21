@@ -14,6 +14,7 @@ RUN npm ci
 COPY . .
 
 # Build the NestJS application
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
 # --------- Production Build ---------

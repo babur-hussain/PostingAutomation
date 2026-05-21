@@ -23,6 +23,7 @@ import { HealthModule } from './modules/health/health.module';
 import { StaticModule } from './modules/static/static.module';
 import { BetaRequestsModule } from './modules/beta-requests/beta-requests.module';
 import { EarlyAccessModule } from './modules/early-access/early-access.module';
+import { SubscriptionModule } from './modules/subscription/subscription.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { EarlyAccessModule } from './modules/early-access/early-access.module';
     StaticModule,
     BetaRequestsModule,
     EarlyAccessModule,
+    SubscriptionModule,
   ],
   providers: [
     // Apply rate limiting globally (60 req/min default, overridable per-route)

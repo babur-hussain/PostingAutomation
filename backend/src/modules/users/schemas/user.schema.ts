@@ -20,6 +20,14 @@ export class User {
   @Prop({ default: 'free', enum: ['free', 'pro', 'enterprise'] })
   plan: string;
 
+  /** Google Play product ID of the active subscription, e.g. "premium_monthly" */
+  @Prop()
+  subscriptionProductId: string;
+
+  /** ISO-8601 expiry date returned by Google Play API */
+  @Prop()
+  subscriptionExpiryDate: string;
+
   // #49: Notification preferences synced from mobile client
   @Prop({
     type: Object,

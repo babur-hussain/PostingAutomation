@@ -87,6 +87,18 @@ export class UsersService {
    * Delete a user and all their associated data (cascading).
    */
   async deleteUser(userId: string): Promise<void> {
+    const user = await this.userModel.findById(userId);
+    if (!user) return;
+
+    if (user.firebaseUid) {
+      try {
+        const admin = require('firebase-admin');
+        await admin.auth().deleteUser(user.firebaseUid);
+      } catch (err) {
+        console.error('Failed to delete Firebase user during account deletion:', err);
+      }
+    }
+
     // 1. Delete social accounts
     await this.socialAccountsService.deleteByUserId(userId);
 

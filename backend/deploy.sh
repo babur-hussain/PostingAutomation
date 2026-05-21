@@ -2,7 +2,7 @@
 
 # Configuration
 EC2_USER="ec2-user"
-EC2_IP="13.235.133.241"
+EC2_IP="65.2.167.201"
 PEM_FILE="PostingAutomation.pem"
 REMOTE_DIR="~/backend"
 

@@ -25,6 +25,11 @@ class UpdateNotificationPreferencesDto {
   @IsOptional() @IsBoolean() postFailure?: boolean;
 }
 
+class UpdateFcmTokenDto {
+  @IsString()
+  token: string;
+}
+
 // #9: Stricter rate limiting for auth endpoints (30 req/min instead of global 60)
 @Throttle({ default: { ttl: 60000, limit: 30 } })
 @Controller('api/v1/auth')
@@ -59,6 +64,24 @@ export class AuthController {
   @Get('account') // Temporary alias for profile/account info if needed
   async getAccount(@CurrentUser('userId') userId: string) {
     return this.authService.getProfile(userId);
+  }
+
+  @UseGuards(FirebaseAuthGuard)
+  @Patch('fcm-token')
+  async addFcmToken(
+    @CurrentUser('userId') userId: string,
+    @Body() body: UpdateFcmTokenDto,
+  ) {
+    return this.authService.addFcmToken(userId, body.token);
+  }
+
+  @UseGuards(FirebaseAuthGuard)
+  @Delete('fcm-token')
+  async removeFcmToken(
+    @CurrentUser('userId') userId: string,
+    @Body() body: UpdateFcmTokenDto,
+  ) {
+    return this.authService.removeFcmToken(userId, body.token);
   }
 
   @UseGuards(FirebaseAuthGuard)

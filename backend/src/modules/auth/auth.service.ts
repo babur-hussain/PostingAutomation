@@ -59,4 +59,24 @@ export class AuthService {
     await this.usersService.deleteUser(userId);
     return { success: true, message: 'Account deleted successfully' };
   }
+
+  async addFcmToken(userId: string, token: string) {
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new UnauthorizedException('User not found');
+    const tokens = (user as any).fcmTokens || [];
+    if (!tokens.includes(token)) {
+      (user as any).fcmTokens = [...tokens, token];
+      await (user as any).save();
+    }
+    return { success: true };
+  }
+
+  async removeFcmToken(userId: string, token: string) {
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new UnauthorizedException('User not found');
+    const tokens = (user as any).fcmTokens || [];
+    (user as any).fcmTokens = tokens.filter((t: string) => t !== token);
+    await (user as any).save();
+    return { success: true };
+  }
 }

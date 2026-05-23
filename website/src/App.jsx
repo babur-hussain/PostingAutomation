@@ -371,9 +371,9 @@ function App() {
               <h4>Company</h4>
               <ul>
                 <li><a href="#">About</a></li>
-                <li><a href="/privacy-policy.html">Privacy Policy</a></li>
-                <li><a href="/terms-and-conditions.html">Terms of Service</a></li>
-                <li><a href="/data-deletion.html">Data Deletion</a></li>
+                <li><a href="https://autopost.lfvs.in/privacy-policy.html">Privacy Policy</a></li>
+                <li><a href="https://autopost.lfvs.in/terms-and-conditions.html">Terms of Service</a></li>
+                <li><a href="https://autopost.lfvs.in/data-deletion.html">Data Deletion</a></li>
               </ul>
             </div>
           </div>

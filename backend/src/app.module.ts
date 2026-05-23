@@ -24,6 +24,9 @@ import { StaticModule } from './modules/static/static.module';
 import { BetaRequestsModule } from './modules/beta-requests/beta-requests.module';
 import { EarlyAccessModule } from './modules/early-access/early-access.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
+import { PosterModule } from './modules/poster/poster.module';
+
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -32,6 +35,7 @@ import { SubscriptionModule } from './modules/subscription/subscription.module';
       load: [configuration],
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
     MongooseModule.forRootAsync(databaseConfig),
     ThrottlerModule.forRoot([
       {
@@ -58,6 +62,7 @@ import { SubscriptionModule } from './modules/subscription/subscription.module';
     BetaRequestsModule,
     EarlyAccessModule,
     SubscriptionModule,
+    PosterModule,
   ],
   providers: [
     // Apply rate limiting globally (60 req/min default, overridable per-route)

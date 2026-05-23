@@ -67,5 +67,9 @@ export default () => ({
     bearerToken: process.env.X_BEARER_TOKEN,
   },
 
+  kieAi: {
+    apiKey: process.env.KIE_AI_API_KEY,
+  },
+
   frontendUrl: process.env.FRONTEND_URL || 'exp://postingautomation.lfvs.in',
 });
